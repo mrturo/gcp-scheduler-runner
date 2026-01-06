@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+*.egg-info/
+
+# Development
+.env
+.env.example
+*.log
+server.log
+
+# Tests
+test_*.py
+tests/
+
+# Git
+.git/
+.gitignore
+.github/
+
+# Documentation
+README.md
+LICENSE
+reference/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build artifacts
+dist/
+build/
+*.egg
+
+# Development tools
+requirements-dev.txt
+envtool.sh
