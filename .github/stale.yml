@@ -1,0 +1,6 @@
+# Stale bot configuration
+daysUntilStale: 30
+daysUntilClose: 7
+exemptLabels:
+  - "pinned"
+  - "security"
