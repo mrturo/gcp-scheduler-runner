@@ -222,8 +222,11 @@ def test_execute_request_with_default_payload(mock_request):
 
 
 @patch("app.execute_request")
-def test_execute_endpoints_with_error(mock_execute, client):
+def test_execute_endpoints_with_error(mock_execute, client, monkeypatch):
     """Test execute endpoint when request fails."""
+    # Set ENDPOINTS environment variable to ensure endpoints are loaded
+    monkeypatch.setenv("ENDPOINTS", '["http://localhost:5000/task1"]')
+    
     mock_execute.side_effect = requests.exceptions.RequestException("Connection error")
 
     response = client.get("/execute")
