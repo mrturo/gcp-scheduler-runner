@@ -269,6 +269,7 @@ jobs:
           # Deploy service with environment variables
           # ENDPOINTS supports template variables (${VAR_NAME}) - add any referenced secrets as --set-env-vars
           # Example: If ENDPOINTS uses ${ENDPOINT_API_KEY}, add "ENDPOINT_API_KEY=${{ secrets.ENDPOINT_API_KEY }}" below
+          # Note: PORT is automatically set by Cloud Run and must not be specified in --set-env-vars
           gcloud run deploy "${{ env.SERVICE }}" \
             --image="${IMAGE_URI}" \
             --region="${{ env.REGION }}" \
@@ -280,7 +281,7 @@ jobs:
             --min-instances=0 \
             --max-instances=10 \
             --timeout=300s \
-            --set-env-vars="PORT=${{ env.PORT }},ENDPOINTS=${{ env.ENDPOINTS }},API_KEY=${{ env.API_KEY }}" \
+            --set-env-vars="ENDPOINTS=${{ env.ENDPOINTS }},API_KEY=${{ env.API_KEY }}" \
             --format="value(status.url)" > service_url.txt
           
           SERVICE_URL=$(cat service_url.txt)
