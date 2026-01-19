@@ -45,7 +45,7 @@ gcloud scheduler jobs create http gcp-scheduler-runner-job \
   --schedule="0 */6 * * *" \
   --uri="https://gcp-scheduler-runner-xxx-uc.a.run.app/execute" \
   --http-method=POST \
-  --headers="X-API-Key=YOUR_API_KEY_HERE" \
+  --headers="Content-Type=application/json,X-API-Key=YOUR_API_KEY_HERE,X-Scheduler-Trigger=true" \
   --attempt-deadline=300s \
   --description="Execute configured endpoints every 6 hours" \
   --project=YOUR_PROJECT_ID
@@ -60,7 +60,7 @@ gcloud scheduler jobs create http gcp-scheduler-runner-job \
   --uri="https://gcp-scheduler-runner-xxx-uc.a.run.app/execute" \
   --http-method=POST \
   --message-body='{"endpoints": ["http://example.com/api1", "http://example.com/api2"], "parallel": true, "max_workers": 5}' \
-  --headers="Content-Type=application/json,X-API-Key=YOUR_API_KEY_HERE" \
+  --headers="Content-Type=application/json,X-API-Key=YOUR_API_KEY_HERE,X-Scheduler-Trigger=true" \
   --attempt-deadline=300s \
   --description="Execute custom endpoints weekdays at 9 AM" \
   --project=YOUR_PROJECT_ID
@@ -267,8 +267,8 @@ gcloud scheduler jobs update http gcp-scheduler-runner-job \
   --location=us-central1 \
   --max-retry-attempts=3 \
   --max-retry-duration=600s \
-  --min-backoff-duration=5s \
-  --max-backoff-duration=60s \
+  --min=5s \
+  --max=60s \
   --max-doublings=3 \
   --project=YOUR_PROJECT_ID
 ```

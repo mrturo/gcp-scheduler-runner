@@ -32,19 +32,17 @@ on:
 
 env:
   IMAGE: gcp-scheduler-runner
-  PORT: 3000
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-central1
   REPO: gcp-scheduler-runner
   SERVICE: gcp-scheduler-runner
-
   # App config - ENDPOINTS structure is public (secrets use ${VAR_NAME} template variables)
   ENDPOINTS: '[{"url": "https://gcp-todoist-runner-646185261155.us-central1.run.app", "method": "GET", "headers": {"X-API-Key": "${ENDPOINT_API_KEY_1}"}, "timeout": 60}]'
-  
   # Secrets for authentication and template variables
   API_KEY: ${{ secrets.API_KEY }}
   ENDPOINT_API_KEY_1: ${{ secrets.ENDPOINT_API_KEY_1 }}
-
+  # Email configuration
+  EMAIL_ADDRESS: ${{ vars.EMAIL_ADDRESS }}
   # Security scanning
   TRIVY_ENABLED: "true" # set "false" to disable
 
@@ -57,11 +55,14 @@ jobs:
     permissions:
       contents: read
       security-events: write
-
+    env:
+      API_KEY: "test-api-key-123"
+      ENDPOINT_API_KEY_1: "dummy-key-123"
+      EMAIL_ADDRESS: "test@example.com"
+      SMTP_PASSWORD: "password123"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Set up Python 3.x
         uses: actions/setup-python@v5
         with:
@@ -70,26 +71,18 @@ jobs:
           cache-dependency-path: |
             requirements.txt
             requirements-dev.txt
-
       - name: Install dependencies (development only)
         run: bash envtool.sh install dev
-
-      - name: Run tests
-        run: bash envtool.sh test
-
-      - name: Run code quality checks
-        run: bash envtool.sh code-check
+      - name: Run code tests and quality checks (CI mode)
+        run: bash envtool.sh quality-gate --ci
         env:
           SKIP_DOCKER_BUILD: "true"  # Skip Docker build in quality checks
-
       # Build Docker image locally for security scanning
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
       - name: Set image tag (short SHA)
         id: image-tag
         run: echo "TAG=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-
       - name: Build Docker image (local only)
         uses: docker/build-push-action@v5
         with:
@@ -97,7 +90,6 @@ jobs:
           push: false
           load: true
           tags: ${{ env.IMAGE }}:${{ steps.image-tag.outputs.TAG }}
-
       - name: Run Trivy vulnerability scanner (all formats in parallel)
         if: env.TRIVY_ENABLED == 'true'
         run: |
@@ -110,7 +102,6 @@ jobs:
             --severity CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN \
             --exit-code 1 \
             "${{ env.IMAGE }}:${{ steps.image-tag.outputs.TAG }}" &
-          
           # Table format for human readability
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
             -v $(pwd):/output \
@@ -120,7 +111,6 @@ jobs:
             --severity CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN \
             --exit-code 1 \
             "${{ env.IMAGE }}:${{ steps.image-tag.outputs.TAG }}" &
-          
           # JSON format for programmatic processing
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
             -v $(pwd):/output \
@@ -130,16 +120,13 @@ jobs:
             --severity CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN \
             --exit-code 1 \
             "${{ env.IMAGE }}:${{ steps.image-tag.outputs.TAG }}" &
-          
           # Wait for all scans to complete and fail if any found vulnerabilities
           wait
-
       - name: Upload Trivy scan results to GitHub Security
         if: always() && env.TRIVY_ENABLED == 'true'
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
-
       - name: Upload Trivy reports as artifacts
         if: always() && env.TRIVY_ENABLED == 'true'
         uses: actions/upload-artifact@v4
@@ -150,7 +137,6 @@ jobs:
             trivy-report-full.json
             trivy-results.sarif
           retention-days: 30
-
   # ============================================================================
   # CD Job: Build, push, and deploy (waits for all quality gates)
   # ============================================================================
@@ -160,25 +146,22 @@ jobs:
     environment: GCP
     permissions:
       contents: read
-
+    outputs:
+      service_url: ${{ steps.deploy.outputs.service_url }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
-
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
           install_components: ''  # Skip extra components for speed
-
       # Setup Docker Buildx for layer caching
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
       # Validates that Artifact Registry repository exists with scanning disabled.
       # CRITICAL: Pipeline fails if repo missing, scanning cannot be verified, or is enabled.
       # ONE-TIME SETUP (run manually in Cloud Shell if repo doesn't exist):
@@ -190,14 +173,11 @@ jobs:
       - name: Ensure Artifact Registry vulnerability scanning is disabled (cost control)
         run: |
           set -euo pipefail
-          
           echo "🔍 Checking Artifact Registry repository and vulnerability scanning status..."
-          
           # Check if repository exists and get vulnerability scanning status
           if ! FULL_OUTPUT=$(gcloud artifacts repositories describe "${{ env.REPO }}" \
             --location="${{ env.REGION }}" \
             --format="value(vulnerabilityScanningConfig.enablementConfig)" 2>&1); then
-            
             echo "❌ ERROR: Cannot access Artifact Registry repository '${{ env.REPO }}'"
             echo ""
             echo "Repository may not exist. To create it, run in Cloud Shell:"
@@ -217,19 +197,15 @@ jobs:
             echo "$FULL_OUTPUT"
             exit 1
           fi
-          
           # Extract only ENABLED/DISABLED (last line if multiline output)
           STATUS=$(echo "$FULL_OUTPUT" | grep -E '^(ENABLED|DISABLED)$' | tail -1)
-          
           if [ -z "$STATUS" ]; then
             echo "❌ ERROR: Cannot parse vulnerability scanning status"
             echo "Raw output:"
             echo "$FULL_OUTPUT"
             exit 1
           fi
-          
           echo "📊 Current status: $STATUS"
-          
           if [ "$STATUS" = "ENABLED" ]; then
             echo "❌ ERROR: Vulnerability scanning is ENABLED!"
             echo "This would incur ~\$5/month in scanning costs."
@@ -246,47 +222,45 @@ jobs:
             echo "❌ ERROR: Unexpected vulnerability scanning status: $STATUS"
             exit 1
           fi
-
       - name: Configure Docker for Artifact Registry
         run: |
           gcloud auth configure-docker "${{ env.REGION }}-docker.pkg.dev" --quiet
-
       - name: Set IMAGE_URI environment variable
+        id: image-uri
         run: |
-          echo "IMAGE_URI=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}:${GITHUB_SHA::7}" >> "$GITHUB_ENV"
-
+          IMAGE_URI="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}:${GITHUB_SHA::7}"
+          echo "IMAGE_URI=$IMAGE_URI" >> "$GITHUB_ENV"
+          echo "uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
       - name: Build and push Docker image to Artifact Registry
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ${{ env.IMAGE_URI }}
+          tags: ${{ steps.image-uri.outputs.uri }}
           cache-from: type=registry,ref=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}:cache
           cache-to: type=registry,ref=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}:cache,mode=max
           build-args: |
             BUILDKIT_INLINE_CACHE=1
-
       - name: Deploy to Cloud Run
         id: deploy
         run: |
           # Deploy service with environment variables
           # ENDPOINTS structure is public, template variables (${VAR_NAME}) reference secrets
           # Note: PORT is automatically set by Cloud Run and must not be specified in --set-env-vars
-          
           # Create env-vars file to handle JSON special characters properly
           # YAML requires JSON to be quoted as a string
           cat > env-vars.yaml <<'EOF'
           ENDPOINTS: '${{ env.ENDPOINTS }}'
           API_KEY: '${{ env.API_KEY }}'
           ENDPOINT_API_KEY_1: '${{ env.ENDPOINT_API_KEY_1 }}'
+          EMAIL_ADDRESS: '${{ env.EMAIL_ADDRESS }}'
+          SMTP_PASSWORD: '${{ secrets.SMTP_PASSWORD }}'
           EOF
-          
           gcloud run deploy "${{ env.SERVICE }}" \
             --image="${IMAGE_URI}" \
             --region="${{ env.REGION }}" \
             --platform=managed \
             --allow-unauthenticated \
-            --port="${{ env.PORT }}" \
             --memory=512Mi \
             --cpu=1 \
             --min-instances=0 \
@@ -294,10 +268,90 @@ jobs:
             --timeout=300s \
             --env-vars-file=env-vars.yaml \
             --format="value(status.url)" > service_url.txt
-          
           SERVICE_URL=$(cat service_url.txt)
           echo "service_url=$SERVICE_URL" >> "$GITHUB_OUTPUT"
           echo "✅ Service deployed to: $SERVICE_URL"
           echo ""
           echo "📍 Cloud Scheduler should invoke: ${SERVICE_URL}/execute"
           echo "⏰ Cloud Scheduler uses UTC timezone for all schedules"
+  # ============================================================================
+  # Setup Cloud Scheduler Job (runs after successful deployment)
+  # ============================================================================
+  setup-scheduler:
+    runs-on: ubuntu-latest
+    needs: deploy  # Only setup scheduler if deployment succeeds
+    environment: GCP-Auto  # Separate environment without required reviewers
+    permissions:
+      contents: read
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: ''
+      - name: Setup Cloud Scheduler job for daily execution
+        run: |
+          set -euo pipefail
+          JOB_NAME="gcp-scheduler-runner-chile"
+          SERVICE_URL="${{ needs.deploy.outputs.service_url }}"
+          echo "🕐 Setting up Cloud Scheduler job: $JOB_NAME"
+          echo "📍 Target URL: ${SERVICE_URL}/execute"
+          echo "⏰ Schedule: Daily at 4:30 AM UTC (1:30 AM / 12:30 AM Chile)"
+          # Check if job already exists with improved verification
+          echo "🔍 Checking if Cloud Scheduler job exists..."
+          if gcloud scheduler jobs describe "$JOB_NAME" \
+            --location="${{ env.REGION }}" \
+            --quiet >/dev/null 2>&1; then
+            JOB_EXISTS=true
+            echo "📋 Job already exists. Will update configuration..."
+          else
+            JOB_EXISTS=false
+            echo "🆕 Job does not exist. Will create new job..."
+          fi
+          # Execute appropriate command based on job existence
+          if [ "$JOB_EXISTS" = true ]; then
+            echo "🔄 Updating existing Cloud Scheduler job..."
+            gcloud scheduler jobs update http "$JOB_NAME" \
+              --location="${{ env.REGION }}" \
+              --schedule="30 4 * * *" \
+              --uri="${SERVICE_URL}/execute" \
+              --http-method=POST \
+              --update-headers="Content-Type=application/json,X-API-Key=${{ secrets.API_KEY }},X-Scheduler-Trigger=true" \
+              --message-body='{
+                "parallel": true,
+                "max_workers": 10,
+                "send_email": true
+              }' \
+              --attempt-deadline=300s \
+              --max-retry-attempts=3 \
+              --description="Executes configured endpoints daily at 4:30 AM UTC with parallel execution and email notifications"
+            echo "✅ Cloud Scheduler job updated successfully"
+          else
+            echo "➕ Creating new Cloud Scheduler job..."
+            gcloud scheduler jobs create http "$JOB_NAME" \
+              --location="${{ env.REGION }}" \
+              --schedule="30 4 * * *" \
+              --time-zone="UTC" \
+              --uri="${SERVICE_URL}/execute" \
+              --http-method=POST \
+              --headers="Content-Type=application/json,X-API-Key=${{ secrets.API_KEY }},X-Scheduler-Trigger=true" \
+              --message-body='{
+                "parallel": true,
+                "max_workers": 10,
+                "send_email": true
+              }' \
+              --attempt-deadline=300s \
+              --max-retry-attempts=3 \
+              --min-backoff=30s \
+              --max-backoff=300s \
+              --description="Executes configured endpoints daily at 4:30 AM UTC with parallel execution and email notifications"
+            echo "✅ Cloud Scheduler job created successfully"
+          fi
+          echo ""
+          echo "📊 Job Details:"
+          gcloud scheduler jobs describe "$JOB_NAME" \
+            --location="${{ env.REGION }}" \
+            --format="table(name,schedule,state,httpTarget.uri)"

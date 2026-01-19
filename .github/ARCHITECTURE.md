@@ -105,7 +105,6 @@ Developer → GitHub Repository → GitHub Actions → GCP Artifact Registry →
     │              │                  │                     │                │
  Commits        Secrets           Workflow             Docker            Service
   code          stored            runs CI/CD            image             running
-                                                                          
                                                                     Uses ENDPOINTS
                                                                     from env vars
 ```
@@ -193,7 +192,7 @@ GitHub Actions        Free (2000 min/month)  $0
 Artifact Registry     Storage + Egress       ~$1-2/month
 Cloud Run            Request + Compute       $0 (free tier)
 Cloud Scheduler      First 3 jobs free       $0
-                     
+
 Total Monthly Cost:                          ~$1-2/month
 ```
 
@@ -279,4 +278,4 @@ Advantages:
 - [GitHub Actions Workflow](.github/workflows/deploy.yml)
 - [Cloud Scheduler Setup](.github/CLOUD_SCHEDULER.md)
 - [Secrets Configuration](.github/secrets.example)
-- [Deployment Guide](.github/README.md)
+- [Deployment Guide](.github/DEPLOYMENT.md)
