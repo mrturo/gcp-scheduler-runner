@@ -9,6 +9,7 @@ by a main `/execute` endpoint.
 - Main endpoint `/execute` that orchestrates multiple endpoints
 - **Parallel execution** using `ThreadPoolExecutor` (default behavior, configurable)
 - **Sequential execution** mode available for controlled workflows
+- **Email notifications** with Gmail SMTP after each execution (optional)
 - Support for cURL-like endpoint configurations: HTTP methods, headers, body, query params, timeouts
 - Support for simple URL strings (backwards compatible)
 - Mix simple and complex configurations in the same run
@@ -48,12 +49,32 @@ Each endpoint can be one of the following:
 pip install -r requirements.txt
 ```
 
+## Project Structure
+
+```
+gcp-scheduler-runner/
+├── src/                    # Source code
+│   ├── app.py             # Flask application
+│   └── config.py          # Configuration utilities
+├── test/                   # Unit tests (mocked)
+│   ├── test_app.py        # App functionality tests
+│   └── test_email.py      # Email notification tests
+├── integration/            # Integration tests (require running server)
+│   └── test_endpoints.py  # End-to-end API tests
+├── envtool.sh             # Development utility script
+└── README.md              # Documentation
+```
+
 ## Usage
 
 ### Start the server
 
 ```bash
-python app.py
+# Using envtool.sh (recommended)
+bash envtool.sh start
+
+# Or directly
+python src/app.py
 ```
 
 Server will run at `http://localhost:3000` by default.
@@ -209,6 +230,7 @@ curl -X POST http://localhost:3000/execute \
 **Parameters**:
 - `parallel` (boolean, default: `true`): Enable parallel execution
 - `max_workers` (integer, default: `min(10, num_endpoints)`): Maximum number of concurrent workers
+- `send_email` (boolean, default: `false`): Send email notification after execution
 
 **Response includes execution mode**:
 ```json
@@ -219,7 +241,13 @@ curl -X POST http://localhost:3000/execute \
   "failed": 0,
   "execution_mode": "parallel",
   "results": [...],
-  "errors": []
+  "errors": [],
+  "email_notification": {
+    "email_sent": true,
+    "recipient": "admin@example.com",
+    "from": "notifications@example.com",
+    "attachments": 3
+  }
 }
 ```
 
@@ -227,6 +255,68 @@ curl -X POST http://localhost:3000/execute \
 - Parallel execution is ideal for I/O-bound HTTP requests
 - Order of execution is not guaranteed in parallel mode
 - Single endpoint requests automatically use sequential mode
+
+## Email Notifications
+
+Send HTML email reports after each execution via Gmail SMTP.
+
+### Setup Gmail SMTP
+
+1. **Enable 2-Step Verification** in your Google Account:
+   - Go to [https://myaccount.google.com/security](https://myaccount.google.com/security)
+   - Enable "2-Step Verification"
+
+2. **Generate App Password**:
+   - Go to [https://myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+   - Select "Mail" and "Other (Custom name)"
+   - Copy the 16-character password
+
+3. **Configure environment variables** in `.env`:
+   ```bash
+   SMTP_HOST=smtp.gmail.com
+   SMTP_PORT=587
+   SMTP_USER=your-email@gmail.com
+   SMTP_PASSWORD=your_16_char_app_password
+   EMAIL_FROM=your-email@gmail.com
+   EMAIL_TO=recipient@example.com
+   ```
+
+### Usage
+
+Add `"send_email": true` to your request:
+
+```bash
+curl -X POST http://localhost:3000/execute \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your_api_key_here" \
+  -d '{
+    "endpoints": ["https://api.example.com/task"],
+    "send_email": true
+  }'
+```
+
+**Email includes**:
+- ✅/❌ Success/Failure status
+- Total, successful, and failed endpoint counts
+- Execution mode (parallel/sequential)
+- Detailed results for each endpoint (as HTML)
+- Error details if any failures occurred
+- **📎 JSON file attachments**: Each endpoint result attached as separate `.json` file
+
+**JSON Attachments**:
+- **One JSON file per endpoint result**
+- Filename format: `01_api_example_com_users_result.json` (for successful executions)
+- Error format: `ERROR_01_api_example_com_orders.json` (for failed executions)
+- Contains complete endpoint response data: URL, method, status code, headers, response body, timestamp
+- Easy to process programmatically or archive for auditing
+- Filenames sanitized: URLs converted to safe filesystem names (max 50 chars)
+
+**Notes**:
+- Emails are sent **only if** `send_email: true` is in the request
+- If SMTP credentials are not configured, execution continues without email
+- Email sent from your personal Gmail (appears in your "Sent" folder)
+- Free and unlimited for personal use
+- JSON attachments included automatically (no additional configuration needed)
 - Error handling works the same in both modes
 
 ### Health Check
@@ -237,7 +327,9 @@ curl http://localhost:3000/health
 
 ## Tests
 
-Run the project's tests with coverage using the helper script:
+### Unit Tests (Recommended)
+
+Run fast unit tests with mocked dependencies:
 
 ```bash
 bash envtool.sh test
@@ -247,16 +339,39 @@ Or run manually:
 
 ```bash
 source .venv/bin/activate
-pytest test_app.py -v --cov=app --cov=config --cov-report=term-missing
+pytest test/ -v --cov=src --cov-report=term-missing
+```
+
+### Integration Tests (Optional)
+
+Run end-to-end tests against a running server:
+
+```bash
+# 1. Start the server in another terminal
+bash envtool.sh start
+
+# 2. Run integration tests
+source .venv/bin/activate
+pytest integration/ -v
 ```
 
 ### Test Coverage
 
-The project aims for full coverage of the core logic. Tests cover:
+The project maintains **100% test coverage** of the core logic:
+
+**Unit Tests** (`test/`):
+- **test_app.py**: All endpoints, request execution, validation, error handling
+- **test_email.py**: Email notification functionality with Gmail SMTP
+
+**Integration Tests** (`integration/`):
+- **test_endpoints.py**: End-to-end API testing against live server
+
+**Coverage includes**:
 - All endpoints (/, /health, /task1, /task2, /task3, /execute)
-- Request execution functions
-- Validation and configuration parsing
-- Error handling and exceptional cases
+- Parallel and sequential execution modes  
+- Email notifications with JSON attachments
+- Template variable resolution
+- Error handling and edge cases
 
 ## Configuration
 
@@ -373,14 +488,22 @@ Endpoints are executed in defined order (ENDPOINT_1, ENDPOINT_2, ...).
 
 ## Quality
 
-- Formatting: Black + isort
-- Linting: Pylint + autoflake
-- Tests: pytest with coverage
-
 Run quality checks with:
 
 ```bash
 bash envtool.sh code-check
+```
+
+**Includes**:
+- **Formatting**: Black + isort
+- **Linting**: Pylint + autoflake
+- **Type checking**: mypy
+- **Security scanning**: Trivy (vulnerabilities, misconfigurations, secrets)
+
+Run tests separately with:
+
+```bash
+bash envtool.sh test
 ```
 
 ## Response Format
@@ -452,20 +575,28 @@ After deployment, set up Cloud Scheduler to trigger the service periodically:
 - **Authentication**: Must include `X-API-Key` header
 
 ```bash
-# Example: Execute every 6 hours (00:00, 06:00, 12:00, 18:00 UTC)
-gcloud scheduler jobs create http gcp-scheduler-runner-job \
+# Execute daily at 4:30 AM UTC (early morning in Chile) with parallel execution and email notifications
+gcloud scheduler jobs create http gcp-scheduler-runner-chile \
   --location=us-central1 \
-  --schedule="0 */6 * * *" \
-  --uri="https://YOUR-SERVICE-URL.run.app/execute" \
+  --schedule="30 4 * * *" \
+  --uri="https://gcp-scheduler-runner-646185261155.us-central1.run.app/execute" \
   --http-method=POST \
-  --headers="X-API-Key=YOUR_API_KEY_HERE" \
-  --attempt-deadline=300s
+  --headers="Content-Type=application/json,X-API-Key=YOUR_API_KEY_HERE,X-Scheduler-Trigger=true" \
+  --message-body='{
+    "parallel": true,
+    "max_workers": 10,
+    "send_email": true
+  }' \
+  --attempt-deadline=300s \
+  --max-retry-attempts=3 \
+  --description="Executes configured endpoints daily at 4:30 AM UTC with parallel execution and email notifications"
 ```
 
-**Timezone Conversion Examples**:
-- 9:00 AM EST (UTC-5) → `--schedule="0 14 * * *"` (14:00 UTC)
-- 9:00 AM PST (UTC-8) → `--schedule="0 17 * * *"` (17:00 UTC)
-- 6:00 PM EST → `--schedule="0 23 * * *"` (23:00 UTC same day)
+**Timezone Conversion Examples for Chile**:
+- **4:30 AM UTC** → 1:30 AM Chile (verano) / 12:30 AM Chile (invierno) ⭐ **RECOMENDADO**
+- **5:00 AM UTC** → 2:00 AM Chile (verano) / 1:00 AM Chile (invierno)  
+- **6:00 AM UTC** → 3:00 AM Chile (verano) / 2:00 AM Chile (invierno)
+- **7:00 AM UTC** → 4:00 AM Chile (verano) / 3:00 AM Chile (invierno)
 
 See [.github/CLOUD_SCHEDULER.md](.github/CLOUD_SCHEDULER.md) for complete setup guide with timezone conversion table.
 

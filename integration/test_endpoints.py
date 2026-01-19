@@ -7,14 +7,12 @@ import requests
 # Base URL for the API
 BASE_URL = "http://localhost:3000"
 
-
 def test_execute_with_default_endpoints():
     """Test using the default configured endpoints"""
     print("\n=== Test 1: Execute default endpoints ===")
     response = requests.post(f"{BASE_URL}/execute", timeout=30)
     print(f"Status: {response.status_code}")
     print(f"Response: {json.dumps(response.json(), indent=2)}")
-
 
 def test_execute_with_simple_urls():
     """Test with simple URL strings"""
@@ -26,7 +24,6 @@ def test_execute_with_simple_urls():
     response = requests.post(f"{BASE_URL}/execute", json=payload, timeout=30)
     print(f"Status: {response.status_code}")
     print(f"Response: {json.dumps(response.json(), indent=2)}")
-
 
 def test_execute_with_complex_configs():
     """Test with complex configurations (cURL-like)"""
@@ -56,7 +53,6 @@ def test_execute_with_complex_configs():
     print(f"Status: {response.status_code}")
     print(f"Response: {json.dumps(response.json(), indent=2)}")
 
-
 def test_execute_with_mixed_configs():
     """Test mixing simple URLs and complex configurations"""
     print("\n=== Test 4: Mix simple and complex configs ===")
@@ -77,14 +73,12 @@ def test_execute_with_mixed_configs():
     print(f"Status: {response.status_code}")
     print(f"Response: {json.dumps(response.json(), indent=2)}")
 
-
 def test_health():
     """Test the health check endpoint"""
     print("\n=== Test 5: Health Check ===")
     response = requests.get(f"{BASE_URL}/health", timeout=30)
     print(f"Status: {response.status_code}")
     print(f"Response: {json.dumps(response.json(), indent=2)}")
-
 
 if __name__ == "__main__":
     try:

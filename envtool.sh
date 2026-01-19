@@ -1,3 +1,11 @@
+#!/bin/bash
+
+# Color definitions for terminal output
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
 function start_project() {
     if [ ! -d ".venv" ]; then
         echo -e "${RED}❌ The virtual environment (.venv) does not exist. Run first: bash envtool.sh install dev${NC}"
@@ -19,7 +27,7 @@ function start_project() {
         lsof -ti :$PORT | xargs kill -9 || true
     fi
 
-    python app.py
+    python src/app.py
     deactivate
 }
 
@@ -30,7 +38,7 @@ function run_tests() {
     fi
     echo -e "${GREEN}🧪 Running tests...${NC}"
     source .venv/bin/activate
-    pytest test_app.py -v --cov=app --cov=config --cov-report=term-missing
+    pytest test/ -v --cov=src --cov-report=term-missing
     local status=$?
     deactivate
     if [ $status -eq 0 ]; then
@@ -64,31 +72,84 @@ function clean_all() {
 }
 
 function code_check() {
-    local paths=(".")
+    set -e
+    local ci_mode=false
+    local exit_code=0
+    
+    # Check if --ci flag is present
+    if [[ "$1" == "--ci" ]]; then
+        ci_mode=true
+        echo -e "${YELLOW}🔒 Running in CI mode (check-only, no modifications)${NC}"
+    fi
+    
+    local paths=("src" "test")
     echo -e "${GREEN}📁 Checking code in: ${paths[*]}${NC}"
     # If a virtualenv exists, activate it so linters can resolve dependencies
     if [ -f ".venv/bin/activate" ]; then
         echo -e "${GREEN}🔌 Activating .venv for code checks...${NC}"
         source .venv/bin/activate
     fi
-    # Only run if the tools are installed
+    
+    # Only run if the tools are installed, else warn if missing
     if command -v black >/dev/null 2>&1; then
         echo -e "${GREEN}🎨 Running black...${NC}"
-        black *.py
+        if [ "$ci_mode" = true ]; then
+            black --check src/*.py test/*.py
+        else
+            black src/*.py test/*.py
+        fi
+    else
+        echo -e "${YELLOW}⚠️  black not found, skipping...${NC}"
     fi
+
     if command -v isort >/dev/null 2>&1; then
         echo -e "${GREEN}🔧 Running isort...${NC}"
-        isort *.py
+        if [ "$ci_mode" = true ]; then
+            isort --check-only src/*.py test/*.py
+        else
+            isort src/*.py test/*.py
+        fi
+    else
+        echo -e "${YELLOW}⚠️  isort not found, skipping...${NC}"
     fi
+
     if command -v autoflake >/dev/null 2>&1; then
         echo -e "${GREEN}🧹 Running autoflake...${NC}"
-        autoflake --remove-all-unused-imports --remove-unused-variables --in-place --recursive *.py
+        if [ "$ci_mode" = true ]; then
+            autoflake --remove-all-unused-imports --remove-unused-variables --check --recursive src/*.py test/*.py
+        else
+            autoflake --remove-all-unused-imports --remove-unused-variables --in-place --recursive src/*.py test/*.py
+        fi
+    else
+        echo -e "${YELLOW}⚠️  autoflake not found, skipping...${NC}"
     fi
-    if command -v pylint >/dev/null 2>&1; then
-        echo -e "${GREEN}🔍 Running pylint on main files...${NC}"
-        pylint --persistent=no app.py config.py
+
+    if [ -f ".venv/bin/pylint" ]; then
+        echo -e "${GREEN}🔍 Running pylint on all Python files in src/ and test/...${NC}"
+        PY_FILES=$(find src test -type f -name "*.py")
+        if [ -n "$PY_FILES" ]; then
+            # Fail if score < 10.0 (any recommendation), and do not continue on any warning
+            PYTHONPATH=src .venv/bin/pylint --persistent=no --fail-under=10.0 $PY_FILES
+        else
+            echo -e "${YELLOW}⚠️  No Python files found in src/ or test/, skipping pylint...${NC}"
+        fi
+    else
+        echo -e "${YELLOW}⚠️  pylint not found, skipping...${NC}"
     fi
-    
+
+    if command -v mypy >/dev/null 2>&1; then
+        echo -e "${GREEN}🔬 Running mypy type checker...${NC}"
+        PYTHONPATH=src mypy src test --ignore-missing-imports
+    else
+        echo -e "${YELLOW}⚠️  mypy not found, skipping...${NC}"
+    fi
+
+    if command -v trivy >/dev/null 2>&1; then
+        echo -e "${GREEN}🔒 Running trivy security scanner...${NC}"
+        trivy fs --scanners vuln,misconfig,secret --severity HIGH,CRITICAL --skip-files '.env' .
+    else
+        echo -e "${YELLOW}⚠️  trivy not found, skipping...${NC}"
+    fi
     echo ""
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${GREEN}✅ Quality Checks Completed${NC}"
@@ -170,7 +231,6 @@ function install() {
     echo -e "${GREEN}✅ Environment ready. Activate with: source .venv/bin/activate${NC}"
 }
 
-
 function execute_logic() {
     if [ ! -d ".venv" ]; then
         echo -e "${RED}❌ The virtual environment (.venv) does not exist. Run first: bash envtool.sh install dev${NC}"
@@ -188,6 +248,10 @@ function execute_logic() {
     
     # Execute the logic using Python directly
     python << 'PYTHON_SCRIPT'
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 from config import load_endpoints_from_env
 from datetime import datetime
 import requests
@@ -358,7 +422,17 @@ case "${1:-}" in
         execute_logic
         ;;
     *)
-        echo -e "${RED}Unsupported command. Use: install [dev|prod], reinstall [dev|prod], uninstall, clean-env, clean-cache, code-check, status, test, start, execute${NC}"
+        echo -e "${RED}Unsupported command. Use:${NC}"
+        echo -e "${GREEN}  install [dev|prod]       ${NC}- Install dependencies"
+        echo -e "${GREEN}  reinstall [dev|prod]     ${NC}- Clean and reinstall"
+        echo -e "${GREEN}  uninstall                ${NC}- Remove virtual environment"
+        echo -e "${GREEN}  clean-env                ${NC}- Remove .venv only"
+        echo -e "${GREEN}  clean-cache              ${NC}- Clean Python cache files"
+        echo -e "${GREEN}  code-check [--ci]        ${NC}- Run code quality checks (use --ci for check-only mode)"
+        echo -e "${GREEN}  status                   ${NC}- Check environment status"
+        echo -e "${GREEN}  test                     ${NC}- Run test suite"
+        echo -e "${GREEN}  start                    ${NC}- Start Flask server"
+        echo -e "${GREEN}  execute                  ${NC}- Execute configured endpoints"
         exit 1
         ;;
 esac

@@ -35,9 +35,8 @@ WORKDIR /app
 # Copy Python packages from builder
 COPY --from=builder /root/.local /home/appuser/.local
 
-# Copy application code
-COPY --chown=appuser:appuser app.py .
-COPY --chown=appuser:appuser config.py .
+# Copia toda la carpeta src al contenedor
+COPY --chown=appuser:appuser src/ ./src/
 
 # Switch to non-root user
 USER appuser
@@ -46,14 +45,13 @@ USER appuser
 ENV PATH=/home/appuser/.local/bin:$PATH
 
 # Cloud Run will set PORT environment variable
-ENV PORT=3000
 
-# Expose port (informational only)
-EXPOSE ${PORT}
+# Expose port (Cloud Run expects 8080 by default)
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT}/health').read()" || exit 1
 
-# Start Flask application
-CMD ["python", "app.py"]
+# Inicia la aplicación Flask desde el paquete src
+CMD ["python", "-m", "src.app"]

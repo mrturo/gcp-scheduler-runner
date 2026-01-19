@@ -1,0 +1,140 @@
+Traceback (most recent call last):
+  File "/Users/a0a11b7/Documents/reps-personal/gcp-scheduler-runner/src/app.py", line 11, in <module>
+    from src.auth import require_api_key
+ModuleNotFoundError: No module named 'src'
+Traceback (most recent call last):
+  File "/Users/a0a11b7/Documents/reps-personal/gcp-scheduler-runner/src/app.py", line 11, in <module>
+    from src.auth import require_api_key
+ModuleNotFoundError: No module named 'src'
+Traceback (most recent call last):
+  File "/Users/a0a11b7/Documents/reps-personal/gcp-scheduler-runner/src/app.py", line 11, in <module>
+    from src.auth import require_api_key
+ModuleNotFoundError: No module named 'src'
+
+🚀 Server started at http://0.0.0.0:8080
+📋 Configured endpoints: 1
+   1. [GET] https://gcp-todoist-runner-646185261155.us-central1.run.app
+
+ * Serving Flask app 'app'
+ * Debug mode: on
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://192.168.1.84:8080
+[33mPress CTRL+C to quit[0m
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 103-648-531
+/opt/homebrew/Cellar/python@3.14/3.14.2/Frameworks/Python.framework/Versions/3.14/lib/python3.14/multiprocessing/resource_tracker.py:396: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown: {'/mp-ozazlhyv'}
+  warnings.warn(
+
+🚀 Server started at http://0.0.0.0:3000
+📋 Configured endpoints: 1
+   1. [GET] https://gcp-todoist-runner-646185261155.us-central1.run.app
+
+ * Serving Flask app 'app'
+ * Debug mode: on
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:3000
+ * Running on http://192.168.1.84:3000
+[33mPress CTRL+C to quit[0m
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 103-648-531
+127.0.0.1 - - [21/Jan/2026 21:06:48] "[31m[1mPOST /execute HTTP/1.1[0m" 401 -
+127.0.0.1 - - [21/Jan/2026 21:06:48] "[31m[1mPOST /execute HTTP/1.1[0m" 401 -
+127.0.0.1 - - [21/Jan/2026 21:06:48] "[31m[1mPOST /execute HTTP/1.1[0m" 401 -
+127.0.0.1 - - [21/Jan/2026 21:06:48] "[31m[1mPOST /execute HTTP/1.1[0m" 401 -
+127.0.0.1 - - [21/Jan/2026 21:06:48] "GET /health HTTP/1.1" 200 -
+/opt/homebrew/Cellar/python@3.14/3.14.2/Frameworks/Python.framework/Versions/3.14/lib/python3.14/multiprocessing/resource_tracker.py:396: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown: {'/mp-3j_x07oa'}
+  warnings.warn(
+
+🚀 Server started at http://0.0.0.0:3000
+📋 Configured endpoints: 1
+   1. [GET] https://gcp-todoist-runner-646185261155.us-central1.run.app
+
+ * Serving Flask app 'app'
+ * Debug mode: on
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:3000
+ * Running on http://192.168.1.84:3000
+[33mPress CTRL+C to quit[0m
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 103-648-531
+127.0.0.1 - - [21/Jan/2026 21:08:14] "[31m[1mPOST /execute HTTP/1.1[0m" 401 -
+127.0.0.1 - - [21/Jan/2026 21:08:14] "[31m[1mPOST /execute HTTP/1.1[0m" 401 -
+127.0.0.1 - - [21/Jan/2026 21:08:14] "[31m[1mPOST /execute HTTP/1.1[0m" 401 -
+127.0.0.1 - - [21/Jan/2026 21:08:14] "[31m[1mPOST /execute HTTP/1.1[0m" 401 -
+127.0.0.1 - - [21/Jan/2026 21:08:14] "GET /health HTTP/1.1" 200 -
+/opt/homebrew/Cellar/python@3.14/3.14.2/Frameworks/Python.framework/Versions/3.14/lib/python3.14/multiprocessing/resource_tracker.py:396: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown: {'/mp-blwaq7h6'}
+  warnings.warn(
+
+🚀 Server started at http://0.0.0.0:3000
+📋 Configured endpoints: 1
+   1. [GET] https://gcp-todoist-runner-646185261155.us-central1.run.app
+
+ * Serving Flask app 'app'
+ * Debug mode: on
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:3000
+ * Running on http://192.168.1.84:3000
+[33mPress CTRL+C to quit[0m
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 103-648-531
+127.0.0.1 - - [21/Jan/2026 21:08:55] "[31m[1mPOST /execute HTTP/1.1[0m" 401 -
+127.0.0.1 - - [21/Jan/2026 21:08:55] "[31m[1mPOST /execute HTTP/1.1[0m" 401 -
+127.0.0.1 - - [21/Jan/2026 21:08:55] "[31m[1mPOST /execute HTTP/1.1[0m" 401 -
+127.0.0.1 - - [21/Jan/2026 21:08:55] "[31m[1mPOST /execute HTTP/1.1[0m" 401 -
+127.0.0.1 - - [21/Jan/2026 21:08:55] "GET /health HTTP/1.1" 200 -
+ * Detected change in '/Users/a0a11b7/Documents/reps-personal/gcp-scheduler-runner/test/test_coverage_100.py', reloading
+
+🚀 Server started at http://0.0.0.0:3000
+📋 Configured endpoints: 1
+   1. [GET] https://gcp-todoist-runner-646185261155.us-central1.run.app
+
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 103-648-531
+ * Detected change in '/Users/a0a11b7/Documents/reps-personal/gcp-scheduler-runner/test/test_coverage_100.py', reloading
+
+🚀 Server started at http://0.0.0.0:3000
+📋 Configured endpoints: 1
+   1. [GET] https://gcp-todoist-runner-646185261155.us-central1.run.app
+
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 103-648-531
+
+🚀 Server started at http://0.0.0.0:3000
+📋 Configured endpoints: 1
+   1. [GET] https://gcp-todoist-runner-646185261155.us-central1.run.app
+
+Traceback (most recent call last):
+  File "/Users/a0a11b7/Documents/reps-personal/gcp-scheduler-runner/src/app.py", line 280, in <module>
+    app.run(debug=True, host="0.0.0.0", port=config.port)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/a0a11b7/Documents/reps-personal/gcp-scheduler-runner/.venv/lib/python3.14/site-packages/flask/app.py", line 612, in run
+    run_simple(t.cast(str, host), port, self, **options)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/a0a11b7/Documents/reps-personal/gcp-scheduler-runner/.venv/lib/python3.14/site-packages/werkzeug/serving.py", line 1115, in run_simple
+    run_with_reloader(
+    ~~~~~~~~~~~~~~~~~^
+        srv.serve_forever,
+        ^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        reloader_type=reloader_type,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/a0a11b7/Documents/reps-personal/gcp-scheduler-runner/.venv/lib/python3.14/site-packages/werkzeug/_reloader.py", line 453, in run_with_reloader
+    ensure_echo_on()
+    ~~~~~~~~~~~~~~^^
+  File "/Users/a0a11b7/Documents/reps-personal/gcp-scheduler-runner/.venv/lib/python3.14/site-packages/werkzeug/_reloader.py", line 433, in ensure_echo_on
+    termios.tcsetattr(sys.stdin, termios.TCSANOW, attributes)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+termios.error: (4, 'Interrupted system call')
