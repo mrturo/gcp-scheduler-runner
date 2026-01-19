@@ -38,9 +38,12 @@ env:
   REPO: gcp-scheduler-runner
   SERVICE: gcp-scheduler-runner
 
-  # App config (endpoints configuration via environment variable)
-  ENDPOINTS: ${{ secrets.ENDPOINTS }}
+  # App config - ENDPOINTS structure is public (secrets use ${VAR_NAME} template variables)
+  ENDPOINTS: '[{"url": "https://gcp-todoist-runner-646185261155.us-central1.run.app", "method": "GET", "headers": {"X-API-Key": "${ENDPOINT_API_KEY_1}"}, "timeout": 60}]'
+  
+  # Secrets for authentication and template variables
   API_KEY: ${{ secrets.API_KEY }}
+  ENDPOINT_API_KEY_1: ${{ secrets.ENDPOINT_API_KEY_1 }}
 
   # Security scanning
   TRIVY_ENABLED: "true" # set "false" to disable
@@ -267,8 +270,7 @@ jobs:
         id: deploy
         run: |
           # Deploy service with environment variables
-          # ENDPOINTS supports template variables (${VAR_NAME}) - add any referenced secrets as --set-env-vars
-          # Example: If ENDPOINTS uses ${ENDPOINT_API_KEY}, add "ENDPOINT_API_KEY=${{ secrets.ENDPOINT_API_KEY }}" below
+          # ENDPOINTS structure is public, template variables (${VAR_NAME}) reference secrets
           # Note: PORT is automatically set by Cloud Run and must not be specified in --set-env-vars
           gcloud run deploy "${{ env.SERVICE }}" \
             --image="${IMAGE_URI}" \
@@ -281,7 +283,7 @@ jobs:
             --min-instances=0 \
             --max-instances=10 \
             --timeout=300s \
-            --set-env-vars="ENDPOINTS=${{ env.ENDPOINTS }},API_KEY=${{ env.API_KEY }}" \
+            --set-env-vars="ENDPOINTS=${{ env.ENDPOINTS }},API_KEY=${{ env.API_KEY }},ENDPOINT_API_KEY_1=${{ env.ENDPOINT_API_KEY_1 }}" \
             --format="value(status.url)" > service_url.txt
           
           SERVICE_URL=$(cat service_url.txt)
