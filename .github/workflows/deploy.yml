@@ -273,10 +273,12 @@ jobs:
           # ENDPOINTS structure is public, template variables (${VAR_NAME}) reference secrets
           # Note: PORT is automatically set by Cloud Run and must not be specified in --set-env-vars
           
-          # Use intermediate variables to handle special characters
-          ENDPOINTS_VALUE="${{ env.ENDPOINTS }}"
-          API_KEY_VALUE="${{ env.API_KEY }}"
-          ENDPOINT_API_KEY_1_VALUE="${{ env.ENDPOINT_API_KEY_1 }}"
+          # Create env-vars file to handle JSON special characters properly
+          cat > env-vars.yaml <<'EOF'
+          ENDPOINTS: ${{ env.ENDPOINTS }}
+          API_KEY: ${{ env.API_KEY }}
+          ENDPOINT_API_KEY_1: ${{ env.ENDPOINT_API_KEY_1 }}
+          EOF
           
           gcloud run deploy "${{ env.SERVICE }}" \
             --image="${IMAGE_URI}" \
@@ -289,7 +291,7 @@ jobs:
             --min-instances=0 \
             --max-instances=10 \
             --timeout=300s \
-            --set-env-vars="ENDPOINTS=${ENDPOINTS_VALUE},API_KEY=${API_KEY_VALUE},ENDPOINT_API_KEY_1=${ENDPOINT_API_KEY_1_VALUE}" \
+            --env-vars-file=env-vars.yaml \
             --format="value(status.url)" > service_url.txt
           
           SERVICE_URL=$(cat service_url.txt)
