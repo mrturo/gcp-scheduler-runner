@@ -11,7 +11,7 @@ function start_project() {
         source .env
         set +a
     fi
-    export PORT="${PORT:-5000}"
+    export PORT="${PORT:-3000}"
 
     # Force free the port before starting
     if lsof -ti :$PORT >/dev/null 2>&1; then

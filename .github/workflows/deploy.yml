@@ -32,7 +32,7 @@ on:
 
 env:
   IMAGE: gcp-scheduler-runner
-  PORT: 5000
+  PORT: 3000
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-central1
   REPO: gcp-scheduler-runner
@@ -274,10 +274,11 @@ jobs:
           # Note: PORT is automatically set by Cloud Run and must not be specified in --set-env-vars
           
           # Create env-vars file to handle JSON special characters properly
+          # YAML requires JSON to be quoted as a string
           cat > env-vars.yaml <<'EOF'
-          ENDPOINTS: ${{ env.ENDPOINTS }}
-          API_KEY: ${{ env.API_KEY }}
-          ENDPOINT_API_KEY_1: ${{ env.ENDPOINT_API_KEY_1 }}
+          ENDPOINTS: '${{ env.ENDPOINTS }}'
+          API_KEY: '${{ env.API_KEY }}'
+          ENDPOINT_API_KEY_1: '${{ env.ENDPOINT_API_KEY_1 }}'
           EOF
           
           gcloud run deploy "${{ env.SERVICE }}" \

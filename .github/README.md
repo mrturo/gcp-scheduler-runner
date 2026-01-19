@@ -33,7 +33,7 @@ Configure these secrets in your GitHub repository settings (`Settings > Secrets 
 ### Application Configuration (Required)
 | Secret | Description | Example |
 |--------|-------------|---------|
-| `PORT` | Application port | `5000` |
+| `PORT` | Application port | `3000` |
 | `API_KEY` | API key for X-API-Key authentication | `sk_live_abc123...` (min 32 chars recommended) |
 | `ENDPOINTS` | JSON array of endpoints (supports ${VAR_NAME} templates) | See examples below |
 
@@ -185,7 +185,7 @@ Edit the environment variables in [deploy.yml](deploy.yml) to customize:
 ```yaml
 env:
   IMAGE: gcp-scheduler-runner          # Docker image name
-  PORT: 5000                            # Application port
+  PORT: 3000                            # Application port
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-central1                   # GCP region for deployment
   REPO: gcp-scheduler-runner            # Artifact Registry repository name
@@ -269,13 +269,13 @@ Test the Docker build locally before pushing:
 docker build -t gcp-scheduler-runner:local .
 
 # Run container
-docker run -p 5000:5000 \
+docker run -p 3000:3000 \
   -e ENDPOINTS='["http://example.com/api"]' \
   gcp-scheduler-runner:local
 
 # Test endpoint
-curl http://localhost:5000/health
-curl -X POST http://localhost:5000/execute
+curl http://localhost:3000/health
+curl -X POST http://localhost:3000/execute
 ```
 
 ## Migration to Workload Identity Federation

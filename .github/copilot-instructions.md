@@ -177,7 +177,7 @@ bash envtool.sh execute               # Execute configured endpoints (from ENDPO
 
 **Environment Variables** (`.env` file):
 ```env
-PORT=5000                           # Flask server port
+PORT=3000                           # Flask server port
 ENDPOINTS='[...]'                   # JSON array of endpoint configurations
 ENDPOINT_1='http://...'            # Individual endpoints (alternative)
 # Add any custom headers or auth tokens as needed
@@ -262,10 +262,10 @@ gcloud run deploy gcp-scheduler-runner \
 python app.py
 
 # Test execute endpoint
-curl -X POST http://localhost:5000/execute
+curl -X POST http://localhost:3000/execute
 
 # With custom endpoints
-curl -X POST http://localhost:5000/execute \
+curl -X POST http://localhost:3000/execute \
   -H "Content-Type: application/json" \
   -d '{"endpoints": ["http://example.com/api"]}'
 ```

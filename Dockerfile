@@ -46,7 +46,7 @@ USER appuser
 ENV PATH=/home/appuser/.local/bin:$PATH
 
 # Cloud Run will set PORT environment variable
-ENV PORT=5000
+ENV PORT=3000
 
 # Expose port (informational only)
 EXPOSE ${PORT}

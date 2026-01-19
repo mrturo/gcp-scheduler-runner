@@ -56,7 +56,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Server will run at `http://localhost:5000` by default.
+Server will run at `http://localhost:3000` by default.
 
 ### Authentication
 
@@ -84,23 +84,23 @@ echo "API_KEY=your_generated_key_here" >> .env
 
 ```bash
 # Without authentication (if API_KEY not set)
-curl -X POST http://localhost:5000/execute
+curl -X POST http://localhost:3000/execute
 
 # With authentication (if API_KEY is set)
-curl -X POST http://localhost:5000/execute \
+curl -X POST http://localhost:3000/execute \
   -H "X-API-Key: your_api_key_here"
 ```
 
 ### Execute endpoints (option 2 - simple URLs)
 
 ```bash
-curl -X POST http://localhost:5000/execute \
+curl -X POST http://localhost:3000/execute \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your_api_key_here" \
   -d '{
     "endpoints": [
-      "http://localhost:5000/task1",
-      "http://localhost:5000/task2"
+      "http://localhost:3000/task1",
+      "http://localhost:3000/task2"
     ],
     "default_payload": {
       "user_id": 123,
@@ -112,7 +112,7 @@ curl -X POST http://localhost:5000/execute \
 ### Execute endpoints (option 3 - full cURL-like configuration)
 
 ```bash
-curl -X POST http://localhost:5000/execute \
+curl -X POST http://localhost:3000/execute \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your_api_key_here" \
   -d '{
@@ -156,7 +156,7 @@ curl -X POST http://localhost:5000/execute \
 ### Mix simple URLs and complex configurations
 
 ```bash
-curl -X POST http://localhost:5000/execute \
+curl -X POST http://localhost:3000/execute \
   -H "Content-Type: application/json" \
   -d '{
     "endpoints": [
@@ -180,13 +180,13 @@ By default, endpoints are executed **in parallel** using `ThreadPoolExecutor`. T
 
 **Parallel execution (default)**:
 ```bash
-curl -X POST http://localhost:5000/execute \
+curl -X POST http://localhost:3000/execute \
   -H "Content-Type: application/json" \
   -d '{
     "endpoints": [
-      "http://localhost:5000/task1",
-      "http://localhost:5000/task2",
-      "http://localhost:5000/task3"
+      "http://localhost:3000/task1",
+      "http://localhost:3000/task2",
+      "http://localhost:3000/task3"
     ],
     "parallel": true,
     "max_workers": 10
@@ -195,12 +195,12 @@ curl -X POST http://localhost:5000/execute \
 
 **Sequential execution (original behavior)**:
 ```bash
-curl -X POST http://localhost:5000/execute \
+curl -X POST http://localhost:3000/execute \
   -H "Content-Type: application/json" \
   -d '{
     "endpoints": [
-      "http://localhost:5000/task1",
-      "http://localhost:5000/task2"
+      "http://localhost:3000/task1",
+      "http://localhost:3000/task2"
     ],
     "parallel": false
   }'
@@ -232,7 +232,7 @@ curl -X POST http://localhost:5000/execute \
 ### Health Check
 
 ```bash
-curl http://localhost:5000/health
+curl http://localhost:3000/health
 ```
 
 ## Tests
@@ -337,8 +337,8 @@ ENDPOINTS='[
 2. **Simple URLs** (no sensitive data):
 
 ```bash
-ENDPOINT_1=http://localhost:5000/task1
-ENDPOINT_2=http://localhost:5000/task2
+ENDPOINT_1=http://localhost:3000/task1
+ENDPOINT_2=http://localhost:3000/task2
 ```
 
 3. **Full JSON configuration** (direct values, not recommended for secrets):
@@ -412,7 +412,7 @@ This project includes a complete CI/CD pipeline for automated deployment to Goog
 1. **Configure GitHub Secrets** (see [.github/README.md](.github/README.md))
    - `GCP_SA_KEY`: Service Account JSON key
    - `GCP_PROJECT_ID`: Your GCP Project ID
-   - `PORT`: Application port (e.g., `5000`)
+   - `PORT`: Application port (e.g., `3000`)
    - `API_KEY`: API key for X-API-Key authentication (generate with: `python3 -c "import secrets; print(secrets.token_urlsafe(32))"` )
    - `ENDPOINTS`: Endpoint configurations (JSON array)
 
@@ -478,19 +478,19 @@ Test the Docker build locally before deployment:
 docker build -t gcp-scheduler-runner:local .
 
 # Run container (without authentication)
-docker run -p 5000:5000 \
+docker run -p 3000:3000 \
   -e ENDPOINTS='["http://example.com/api"]' \
   gcp-scheduler-runner:local
 
 # Run container (with authentication)
-docker run -p 5000:5000 \
+docker run -p 3000:3000 \
   -e ENDPOINTS='["http://example.com/api"]' \
   -e API_KEY='your_api_key_here' \
   gcp-scheduler-runner:local
 
 # Test endpoints
-curl http://localhost:5000/health
-curl -X POST http://localhost:5000/execute -H "X-API-Key: your_api_key_here"
+curl http://localhost:3000/health
+curl -X POST http://localhost:3000/execute -H "X-API-Key: your_api_key_here"
 ```
 
 ### Deployment Documentation

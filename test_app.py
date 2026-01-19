@@ -122,7 +122,7 @@ def test_execute_endpoints_post_with_json(mock_execute, client):
     mock_execute.return_value = mock_response
 
     payload = {
-        "endpoints": ["http://localhost:5000/task1"],
+        "endpoints": ["http://localhost:3000/task1"],
         "default_payload": {"key": "value"},
     }
     response = client.post(
@@ -225,7 +225,7 @@ def test_execute_request_with_default_payload(mock_request):
 def test_execute_endpoints_with_error(mock_execute, client, monkeypatch):
     """Test execute endpoint when request fails."""
     # Set ENDPOINTS environment variable to ensure endpoints are loaded
-    monkeypatch.setenv("ENDPOINTS", '["http://localhost:5000/task1"]')
+    monkeypatch.setenv("ENDPOINTS", '["http://localhost:3000/task1"]')
     
     mock_execute.side_effect = requests.exceptions.RequestException("Connection error")
 
@@ -362,7 +362,7 @@ def test_index_uses_load_endpoints(mock_load, client):
 @patch("app.load_endpoints_from_env")
 def test_execute_uses_load_endpoints(mock_load, client):
     """Execute endpoint should call load_endpoints_from_env when no endpoints provided."""
-    mock_load.return_value = ["http://localhost:5000/task1"]
+    mock_load.return_value = ["http://localhost:3000/task1"]
     import app as app_module
 
     app_module.ENDPOINTS_TO_EXECUTE = None
@@ -411,9 +411,9 @@ def test_execute_endpoints_parallel_mode(mock_execute, client):
 
     payload = {
         "endpoints": [
-            "http://localhost:5000/task1",
-            "http://localhost:5000/task2",
-            "http://localhost:5000/task3",
+            "http://localhost:3000/task1",
+            "http://localhost:3000/task2",
+            "http://localhost:3000/task3",
         ],
         "parallel": True,
     }
@@ -440,8 +440,8 @@ def test_execute_endpoints_sequential_mode(mock_execute, client):
 
     payload = {
         "endpoints": [
-            "http://localhost:5000/task1",
-            "http://localhost:5000/task2",
+            "http://localhost:3000/task1",
+            "http://localhost:3000/task2",
         ],
         "parallel": False,
     }
@@ -475,10 +475,10 @@ def test_execute_endpoints_parallel_with_errors(mock_execute, client):
 
     payload = {
         "endpoints": [
-            "http://localhost:5000/task1",
-            "http://localhost:5000/task2",
-            "http://localhost:5000/task3",
-            "http://localhost:5000/task4",
+            "http://localhost:3000/task1",
+            "http://localhost:3000/task2",
+            "http://localhost:3000/task3",
+            "http://localhost:3000/task4",
         ],
         "parallel": True,
     }
@@ -505,7 +505,7 @@ def test_execute_endpoints_parallel_with_max_workers(mock_execute, client):
     mock_execute.return_value = mock_response
 
     payload = {
-        "endpoints": [f"http://localhost:5000/task{i}" for i in range(1, 6)],
+        "endpoints": [f"http://localhost:3000/task{i}" for i in range(1, 6)],
         "parallel": True,
         "max_workers": 3,
     }
@@ -530,7 +530,7 @@ def test_execute_endpoints_single_endpoint_sequential(mock_execute, client):
     mock_execute.return_value = mock_response
 
     payload = {
-        "endpoints": ["http://localhost:5000/task1"],
+        "endpoints": ["http://localhost:3000/task1"],
         "parallel": True,  # Request parallel but should use sequential
     }
     response = client.post(
@@ -553,8 +553,8 @@ def test_execute_endpoints_parallel_default_behavior(mock_execute, client):
 
     payload = {
         "endpoints": [
-            "http://localhost:5000/task1",
-            "http://localhost:5000/task2",
+            "http://localhost:3000/task1",
+            "http://localhost:3000/task2",
         ]
         # No "parallel" key specified - should default to True
     }

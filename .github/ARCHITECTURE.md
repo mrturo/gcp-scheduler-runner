@@ -26,7 +26,7 @@
 │   Service URL: https://gcp-scheduler-runner-xxx-uc.a.run.app          │
 │                                                                         │
 │   Environment Variables (from GitHub Secrets):                         │
-│   • PORT=5000                                                          │
+│   • PORT=3000                                                          │
 │   • ENDPOINTS=["https://api.example.com/task1", ...]                  │
 │                                                                         │
 │   Available Endpoints:                                                 │

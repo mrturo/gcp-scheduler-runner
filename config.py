@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Port configuration
-PORT = int(os.getenv("PORT", "5000"))
+PORT = int(os.getenv("PORT", "3000"))
 
 # API Key for authentication (optional)
 API_KEY = os.getenv("API_KEY")
