@@ -33,22 +33,41 @@ Configure these secrets in your GitHub repository settings (`Settings > Secrets 
 ### Application Configuration (Required)
 | Secret | Description | Example |
 |--------|-------------|---------|
-| `PORT` | Application port | `5000` |
+| `PORT` | Application port | `3000` |
 | `API_KEY` | API key for X-API-Key authentication | `sk_live_abc123...` (min 32 chars recommended) |
-| `ENDPOINTS` | JSON array of endpoints (supports ${VAR_NAME} templates) | See examples below |
+| `ENDPOINTS` | JSON array of endpoints (supports ${VAR_NAME} templates) | See examples below |### Email Notifications (Optional)
+| Secret | Description | Example |
+|--------|-------------|---------||
+| `EMAIL_ADDRESS` | Gmail address for SMTP (sender and recipient) | `your-email@gmail.com` |
+| `SMTP_PASSWORD` | Gmail App Password (16 chars, no spaces) | `abcdefghijklmnop` |
+| `SMTP_HOST` | SMTP server host (optional, default: smtp.gmail.com) | `smtp.gmail.com` |
+| `SMTP_PORT` | SMTP server port (optional, default: 587) | `587` |
 
-**Additional Secrets** (for template variables in ENDPOINTS):
+**Email Setup** (if using `send_email: true` in requests):
+1. Enable 2-Step Verification in your Google Account
+2. Generate App Password at [https://myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+3. Configure `EMAIL_ADDRESS` and `SMTP_PASSWORD` secrets
+4. Email notifications include HTML reports with JSON attachments for each endpoint result
+
+### Template Variables (Optional)
 | Secret | Description | Example |
 |--------|-------------|---------|
-| `ENDPOINT_API_KEY` | domain API token (if using domain) | `sk_test_abc123...` |
+| `ENDPOINT_API_KEY` | API token for external services | `sk_test_abc123...` |
 | `EXTERNAL_SERVICE_TOKEN` | Token for external services | `bearer_xyz789...` |
 | `DATABASE_PASSWORD` | Database credentials | `super_secret_pwd` |
 | *(Add more as needed)* | Any secret referenced in ENDPOINTS | Use `${VAR_NAME}` syntax |
 
-**ENDPOINTS Examples**:
+**ENDPOINTS Configuration Format**:
+
+Supports three formats:
+1. **Simple URLs**: `["https://api.example.com/task1", "https://api.example.com/task2"]`
+2. **Full objects**: `{"url": "...", "method": "POST", "headers": {...}, "json": {...}, "timeout": 30}`
+3. **Template variables** (RECOMMENDED): `{"url": "...", "headers": {"Authorization": "Bearer ${ENDPOINT_API_KEY}"}}`
+
+<details>
+<summary><b>📖 View ENDPOINTS examples</b></summary>
 
 **🔐 With Template Variables (RECOMMENDED)**:
-Separates secrets from structure - only `ENDPOINTS` structure needs updating, secrets stay separate:
 ```json
 [
   {
@@ -63,27 +82,8 @@ Separates secrets from structure - only `ENDPOINTS` structure needs updating, se
   }
 ]
 ```
-*Note: Create individual GitHub Secrets for each variable (ENDPOINT_API_KEY, EXTERNAL_SERVICE_TOKEN, etc.)*
 
-Simple URLs:
-```json
-["https://api.example.com/task1", "https://api.example.com/task2"]
-```
-
-Full configuration (direct values):
-```json
-[
-  {
-    "url": "https://api.example.com/users",
-    "method": "POST",
-    "headers": {"Authorization": "Bearer token"},
-    "json": {"data": "value"},
-    "timeout": 30
-  }
-]
-```
-
-Mixed format:
+**Mixed format**:
 ```json
 [
   "https://api.example.com/simple",
@@ -95,6 +95,7 @@ Mixed format:
   }
 ]
 ```
+</details>
 
 ## Service Account Permissions
 
@@ -172,75 +173,101 @@ gcloud artifacts repositories describe $REPO \
   --project=$PROJECT_ID
 ```
 
-## Workflow Triggers
+## Local Testing
+
+Test the Docker build locally before pushing:
+
+```bash
+# Build image
+docker build -t gcp-scheduler-runner:local .
+
+# Run container (without email)
+docker run -p 3000:3000 \
+  -e ENDPOINTS='["http://example.com/api"]' \
+  -e API_KEY='your_api_key_here' \
+  gcp-scheduler-runner:local
+
+# Run container (with email notifications)
+docker run -p 3000:3000 \
+  -e ENDPOINTS='["http://example.com/api"]' \
+  -e API_KEY='your_api_key_here' \
+  -e EMAIL_ADDRESS='your-email@gmail.com' \
+  -e SMTP_PASSWORD='your_app_password' \
+  gcp-scheduler-runner:local
+
+# Test endpoints
+curl http://localhost:3000/health
+curl -X POST http://localhost:3000/execute -H "X-API-Key: your_api_key_here"
+```
+
+## Deployment
+
+### Workflow Triggers
 
 The pipeline runs on:
 - **Push to main branch**: Automatic deployment on every commit to `main`
 - **Manual trigger**: Via GitHub Actions UI (`Actions > Deploy to Cloud Run > Run workflow`)
 
-## Configuration
+### Monitoring Deployment
 
-Edit the environment variables in [deploy.yml](deploy.yml) to customize:
-
-```yaml
-env:
-  IMAGE: gcp-scheduler-runner          # Docker image name
-  PORT: 5000                            # Application port
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  REGION: us-central1                   # GCP region for deployment
-  REPO: gcp-scheduler-runner            # Artifact Registry repository name
-  SERVICE: gcp-scheduler-runner         # Cloud Run service name
-  ENDPOINTS: ${{ secrets.ENDPOINTS }}   # Endpoint configurations
-  TRIVY_ENABLED: "true"                 # Enable/disable security scanning
-```
-
-## Security Features
-
-### Trivy Vulnerability Scanning
-- Scans Docker images for vulnerabilities before deployment
-- Generates multiple report formats: SARIF, JSON, Table
-- Uploads results to GitHub Security tab
-- Blocks deployment if critical vulnerabilities found
-- Can be disabled by setting `TRIVY_ENABLED: "false"`
-
-### Cost Controls
-- **Artifact Registry scanning disabled**: Prevents ~$5/month scanning charges
-- **Short SHA tags**: Reduces storage costs by using bounded image tags
-- **Layer caching**: Reduces build time and bandwidth costs
-
-### Non-root Container
-- Application runs as unprivileged user `appuser` (UID 1000)
-- Follows least-privilege security principle
-- Reduces attack surface
-
-## Performance Optimizations
-
-- **Python dependency caching**: ~2-3 min saved per run
-- **Docker layer caching**: ~1-2 min saved per build
-- **Parallel job execution**: CI and CD stages run independently
-- **BuildKit**: Modern Docker builder for faster builds
-- **Minimal base image**: Alpine Linux (~50MB vs ~150MB Debian)
-
-## Monitoring Deployment
-
-### View Deployment Status
+**View Deployment Status**:
 1. Go to `Actions` tab in GitHub repository
 2. Click on the latest workflow run
 3. Monitor both `test` and `deploy` jobs
 
-### Access Deployed Service
+**Access Deployed Service**:
 After successful deployment, the service URL is printed in the deploy job output:
 ```
 ✅ Service deployed to: https://gcp-scheduler-runner-xxx-uc.a.run.app
 ```
 
-### View Cloud Run Logs
+**View Cloud Run Logs**:
 ```bash
 gcloud run services logs read gcp-scheduler-runner \
   --region=us-central1 \
   --project=your-project-id \
   --limit=50
 ```
+
+## Cloud Scheduler Integration
+
+The service can be invoked by Google Cloud Scheduler for automated periodic execution.
+
+### Scheduler-Specific Features
+
+**Detection Header**: Cloud Scheduler jobs should include `X-Scheduler-Trigger: true` header:
+- Enables automatic execution context detection
+- Improves email notification formatting (shows "Scheduled Execution" context)
+- Distinguishes scheduled runs from manual API calls in logs
+
+**Example Cloud Scheduler Job** (with email notifications):
+```bash
+gcloud scheduler jobs create http gcp-scheduler-runner-daily \
+  --location=us-central1 \
+  --schedule="30 4 * * *" \
+  --uri="https://YOUR-SERVICE-URL.run.app/execute" \
+  --http-method=POST \
+  --headers="Content-Type=application/json,X-API-Key=YOUR_API_KEY,X-Scheduler-Trigger=true" \
+  --message-body='{
+    "parallel": true,
+    "max_workers": 10,
+    "send_email": true
+  }' \
+  --attempt-deadline=300s \
+  --max-retry-attempts=3 \
+  --description="Daily execution with parallel mode and email notifications"
+```
+
+**Request Parameters**:
+- `parallel` (boolean, default: `true`): Enable parallel endpoint execution
+- `max_workers` (integer, default: 10): Maximum concurrent workers
+- `send_email` (boolean, default: `false`): Send HTML email report with JSON attachments
+
+**Notes**:
+- Email notifications are **optional** - only sent if `send_email: true`
+- If email secrets not configured, execution continues without email
+- Cloud Scheduler uses **UTC timezone** - convert your local time accordingly
+- The `X-Scheduler-Trigger` header is optional but recommended for better observability
 
 ## Troubleshooting
 
@@ -260,25 +287,43 @@ gcloud run services logs read gcp-scheduler-runner \
 - Verify `ENDPOINTS` secret is correctly configured
 - Test locally with `bash envtool.sh start`
 
-## Local Testing
+### Email Notifications Not Working
+- Verify `EMAIL_ADDRESS` and `SMTP_PASSWORD` secrets are configured
+- Ensure you're using Gmail App Password (not regular password)
+- Check that 2-Step Verification is enabled in Google Account
+- Verify `send_email: true` is included in the request body
+- Check Cloud Run logs for SMTP connection errors
 
-Test the Docker build locally before pushing:
+## Advanced Topics
 
-```bash
-# Build image
-docker build -t gcp-scheduler-runner:local .
+### Security Features
 
-# Run container
-docker run -p 5000:5000 \
-  -e ENDPOINTS='["http://example.com/api"]' \
-  gcp-scheduler-runner:local
+**Trivy Vulnerability Scanning**:
+- Scans Docker images for vulnerabilities before deployment
+- Generates multiple report formats: SARIF, JSON, Table
+- Uploads results to GitHub Security tab
+- Blocks deployment if critical vulnerabilities found
+- Can be disabled by setting `TRIVY_ENABLED: "false"` in [deploy.yml](deploy.yml)
 
-# Test endpoint
-curl http://localhost:5000/health
-curl -X POST http://localhost:5000/execute
-```
+**Cost Controls**:
+- **Artifact Registry scanning disabled**: Prevents ~$5/month scanning charges
+- **Short SHA tags**: Reduces storage costs by using bounded image tags
+- **Layer caching**: Reduces build time and bandwidth costs
 
-## Migration to Workload Identity Federation
+**Non-root Container**:
+- Application runs as unprivileged user `appuser` (UID 1000)
+- Follows least-privilege security principle
+- Reduces attack surface
+
+### Performance Optimizations
+
+- **Python dependency caching**: ~2-3 min saved per run
+- **Docker layer caching**: ~1-2 min saved per build
+- **Parallel job execution**: CI and CD stages run independently
+- **BuildKit**: Modern Docker builder for faster builds
+- **Minimal base image**: Alpine Linux (~50MB vs ~150MB Debian)
+
+### Migration to Workload Identity Federation
 
 Consider migrating from Service Account keys to Workload Identity Federation for improved security:
 

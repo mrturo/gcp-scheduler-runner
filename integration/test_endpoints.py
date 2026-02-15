@@ -5,7 +5,7 @@ import json
 import requests
 
 # Base URL for the API
-BASE_URL = "http://localhost:5000"
+BASE_URL = "http://localhost:3000"
 
 
 def test_execute_with_default_endpoints():
@@ -20,7 +20,7 @@ def test_execute_with_simple_urls():
     """Test with simple URL strings"""
     print("\n=== Test 2: Execute simple URLs ===")
     payload = {
-        "endpoints": ["http://localhost:5000/task1", "http://localhost:5000/task2"],
+        "endpoints": ["http://localhost:3000/task1", "http://localhost:3000/task2"],
         "default_payload": {"user_id": 123, "action": "test"},
     }
     response = requests.post(f"{BASE_URL}/execute", json=payload, timeout=30)
@@ -34,7 +34,7 @@ def test_execute_with_complex_configs():
     payload = {
         "endpoints": [
             {
-                "url": "http://localhost:5000/task1",
+                "url": "http://localhost:3000/task1",
                 "method": "POST",
                 "headers": {
                     "Content-Type": "application/json",
@@ -44,12 +44,12 @@ def test_execute_with_complex_configs():
                 "timeout": 10,
             },
             {
-                "url": "http://localhost:5000/task2",
+                "url": "http://localhost:3000/task2",
                 "method": "POST",
                 "headers": {"Authorization": "Bearer fake-token"},
                 "json": {"status": "active"},
             },
-            {"url": "http://localhost:5000/health", "method": "GET"},
+            {"url": "http://localhost:3000/health", "method": "GET"},
         ]
     }
     response = requests.post(f"{BASE_URL}/execute", json=payload, timeout=30)
@@ -62,14 +62,14 @@ def test_execute_with_mixed_configs():
     print("\n=== Test 4: Mix simple and complex configs ===")
     payload = {
         "endpoints": [
-            "http://localhost:5000/task1",
+            "http://localhost:3000/task1",
             {
-                "url": "http://localhost:5000/task2",
+                "url": "http://localhost:3000/task2",
                 "method": "POST",
                 "headers": {"X-Request-ID": "12345"},
                 "json": {"data": "complex"},
             },
-            "http://localhost:5000/task3",
+            "http://localhost:3000/task3",
         ],
         "default_payload": {"default_key": "default_value"},
     }

@@ -1,3 +1,11 @@
+#!/bin/bash
+
+# Color definitions for terminal output
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
 function start_project() {
     if [ ! -d ".venv" ]; then
         echo -e "${RED}❌ The virtual environment (.venv) does not exist. Run first: bash envtool.sh install dev${NC}"
@@ -11,15 +19,13 @@ function start_project() {
         source .env
         set +a
     fi
-    export PORT="${PORT:-5000}"
-
+    export PORT="${PORT:-3000}"
     # Force free the port before starting
     if lsof -ti :$PORT >/dev/null 2>&1; then
         echo -e "${RED}⚠️  Port $PORT is in use. Killing process...${NC}"
         lsof -ti :$PORT | xargs kill -9 || true
     fi
-
-    python app.py
+    PYTHONPATH="$(pwd)/src:$(pwd)" python src/app.py
     deactivate
 }
 
@@ -30,7 +36,7 @@ function run_tests() {
     fi
     echo -e "${GREEN}🧪 Running tests...${NC}"
     source .venv/bin/activate
-    pytest test_app.py -v --cov=app --cov=config --cov-report=term-missing
+    pytest test/ -v --cov=src --cov-report=term-missing
     local status=$?
     deactivate
     if [ $status -eq 0 ]; then
@@ -44,7 +50,7 @@ function run_tests() {
 function clean_cache() {
     echo -e "${GREEN}🧹 Cleaning project cache and artifacts...${NC}"
     find . -type d -name "__pycache__" -exec rm -rf {} +
-    rm -rf .pytest_cache .mypy_cache .cache dist build *.egg-info htmlcov .coverage
+    rm -rf .pytest_cache .mypy_cache .cache dist build *.egg-info htmlcov .coverage .mutmut_results.txt .mutmut-cache
     echo -e "${GREEN}✅ Cache and artifacts removed.${NC}"
 }
 
@@ -64,35 +70,176 @@ function clean_all() {
 }
 
 function code_check() {
-    local paths=(".")
+    set -e
+    local ci_mode=false
+    local exit_code=0
+    # Check if --ci flag is present
+    if [[ "$1" == "--ci" ]]; then
+        ci_mode=true
+        echo -e "${YELLOW}🔒 Running in CI mode (check-only, no modifications)${NC}"
+    fi
+    local paths=("src" "test")
     echo -e "${GREEN}📁 Checking code in: ${paths[*]}${NC}"
     # If a virtualenv exists, activate it so linters can resolve dependencies
     if [ -f ".venv/bin/activate" ]; then
         echo -e "${GREEN}🔌 Activating .venv for code checks...${NC}"
         source .venv/bin/activate
     fi
-    # Only run if the tools are installed
+    # Only run if the tools are installed, else warn if missing
     if command -v black >/dev/null 2>&1; then
         echo -e "${GREEN}🎨 Running black...${NC}"
-        black *.py
+        if [ "$ci_mode" = true ]; then
+            black --check src/*.py test/*.py integration/*.py
+        else
+            black src/*.py test/*.py integration/*.py
+        fi
+    else
+        echo -e "${YELLOW}⚠️  black not found, skipping...${NC}"
     fi
     if command -v isort >/dev/null 2>&1; then
         echo -e "${GREEN}🔧 Running isort...${NC}"
-        isort *.py
+        if [ "$ci_mode" = true ]; then
+            isort --check-only src/*.py test/*.py integration/*.py
+        else
+            isort src/*.py test/*.py integration/*.py
+        fi
+    else
+        echo -e "${YELLOW}⚠️  isort not found, skipping...${NC}"
     fi
     if command -v autoflake >/dev/null 2>&1; then
         echo -e "${GREEN}🧹 Running autoflake...${NC}"
-        autoflake --remove-all-unused-imports --remove-unused-variables --in-place --recursive *.py
+        if [ "$ci_mode" = true ]; then
+            autoflake --remove-all-unused-imports --remove-unused-variables --check --recursive src/*.py test/*.py integration/*.py
+        else
+            autoflake --remove-all-unused-imports --remove-unused-variables --in-place --recursive src/*.py test/*.py integration/*.py
+        fi
+    else
+        echo -e "${YELLOW}⚠️  autoflake not found, skipping...${NC}"
     fi
-    if command -v pylint >/dev/null 2>&1; then
-        echo -e "${GREEN}🔍 Running pylint on main files...${NC}"
-        pylint --persistent=no app.py config.py
+    if [ -f ".venv/bin/pylint" ]; then
+        echo -e "${GREEN}🔍 Running pylint on all Python files in src/ and test/...${NC}"
+        PY_FILES=$(find src test -type f -name "*.py")
+        if [ -n "$PY_FILES" ]; then
+            # Fail if score < 10.0 (any recommendation), and do not continue on any warning
+            PYTHONPATH=src .venv/bin/pylint --persistent=no --fail-under=10.0 $PY_FILES
+        else
+            echo -e "${YELLOW}⚠️  No Python files found in src/ or test/, skipping pylint...${NC}"
+        fi
+    else
+        echo -e "${YELLOW}⚠️  pylint not found, skipping...${NC}"
     fi
-    
+    if command -v mypy >/dev/null 2>&1; then
+        echo -e "${GREEN}🔬 Running mypy type checker...${NC}"
+        PYTHONPATH=src mypy src test --ignore-missing-imports
+    else
+        echo -e "${YELLOW}⚠️  mypy not found, skipping...${NC}"
+    fi
+    if command -v trivy >/dev/null 2>&1; then
+        echo -e "${GREEN}🔒 Running trivy security scanner...${NC}"
+        trivy fs --scanners vuln,misconfig,secret --severity HIGH,CRITICAL --skip-files '.env' .
+    else
+        echo -e "${YELLOW}⚠️  trivy not found, skipping...${NC}"
+    fi
     echo ""
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${GREEN}✅ Quality Checks Completed${NC}"
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+}
+
+function quality_gate() {
+    echo -e "${GREEN}🚪 Running quality gate...${NC}"
+    echo ""
+    local code_check_passed=false
+    local test_passed=false
+    # Run code-check
+    echo -e "${GREEN}📋 Step 1: Running code-check...${NC}"
+    if bash envtool.sh code-check "$@"; then
+        echo -e "${GREEN}✅ code-check PASSED${NC}"
+        code_check_passed=true
+    else
+        echo -e "${RED}❌ code-check FAILED${NC}"
+        code_check_passed=false
+        echo ""
+        echo -e "${RED}Fix the code-check issues and try again.${NC}"
+        exit 1
+    fi
+    echo ""
+    # Run tests
+    echo -e "${GREEN}🧪 Step 2: Running tests...${NC}"
+    if bash envtool.sh test; then
+        echo -e "${GREEN}✅ test PASSED${NC}"
+        test_passed=true
+    else
+        echo -e "${RED}❌ test FAILED${NC}"
+        test_passed=false
+        echo ""
+        echo -e "${RED}Fix the test issues and try again.${NC}"
+        exit 1
+    fi
+    # Check if both passed
+    if [ "$code_check_passed" = true ] && [ "$test_passed" = true ]; then
+        echo ""
+        echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${GREEN}🎉 Quality Gate PASSED${NC}"
+        echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${GREEN}✅ code-check: PASSED${NC}"
+        echo -e "${GREEN}✅ test: PASSED (100% coverage)${NC}"
+        echo -e "${GREEN}✅ All quality checks completed successfully${NC}"
+        echo ""
+        exit 0
+    fi
+    echo ""
+    # If we get here, we exceeded max iterations
+    echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${RED}❌ Quality Gate FAILED${NC}"
+    echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${RED}Maximum iterations ($max_iterations) reached.${NC}"
+    echo -e "${RED}Manual intervention required.${NC}"
+    exit 1
+}
+
+function mutation_check() {
+    rm -rf .mutmut_results.txt .mutmut-cache
+    if [ ! -d ".venv" ]; then
+        echo -e "${RED}❌ The virtual environment (.venv) does not exist. Run first: bash envtool.sh install dev${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}🧬 Running mutation testing with mutmut...${NC}"
+    source .venv/bin/activate
+    trap deactivate EXIT
+    if ! command -v mutmut >/dev/null 2>&1; then
+        echo -e "${RED}❌ mutmut is not installed in the virtual environment.${NC}"
+        echo -e "${YELLOW}➡️  Install dev dependencies: pip install -r requirements-dev.txt${NC}"
+        deactivate
+        exit 1
+    fi
+    # Detect config in pyproject.toml or setup.cfg
+    if grep -q '\[tool.mutmut\]' pyproject.toml 2>/dev/null || grep -q '\[mutmut\]' setup.cfg 2>/dev/null; then
+        echo -e "${GREEN}⚙️  Using mutmut configuration from pyproject.toml or setup.cfg...${NC}"
+        mutmut run
+    else
+        echo -e "${YELLOW}⚠️  No mutmut config found, using default paths: src/ (code), test/ (tests)${NC}"
+        PYTHONPATH=src mutmut run --paths-to-mutate "src/" --tests-dir "test/"
+    fi
+    echo -e "${GREEN}📊 Mutation results:${NC}"
+    mutmut results > .mutmut_results.txt
+    cat .mutmut_results.txt
+    # Parse Survived (N) line
+    local survived_line
+    survived_line=$(grep -E '^Survived[[:space:]]+\([0-9]+\)' .mutmut_results.txt | head -n1)
+    if [[ $survived_line =~ \(([0-9]+)\) ]]; then
+        local survivors=${BASH_REMATCH[1]}
+        if [ "$survivors" -gt 0 ]; then
+            echo -e "${RED}❌ Mutation testing failed: $survivors surviving mutants detected.${NC}"
+            exit 2
+        else
+            echo -e "${GREEN}✅ Mutation testing passed: No surviving mutants!${NC}"
+            exit 0
+        fi
+    else
+        echo -e "${YELLOW}⚠️  Could not parse mutation results. Please check .mutmut_results.txt manually.${NC}"
+        exit 1
+    fi
 }
 
 function check_status() {
@@ -121,39 +268,31 @@ function install() {
     local PYTHON_BINARY="${PYTHON_BINARY_OVERRIDE:-python3}"
     local REQUIRED_MAJOR=3
     local REQUIRED_MINOR=8
-
     if [[ "$mode" != "prod" && "$mode" != "dev" ]]; then
         echo -e "${RED}❌ You must specify the installation mode: 'prod' or 'dev'.${NC}"
         echo -e "${RED}   Example: bash envtool.sh install prod${NC}"
         echo -e "${RED}   Example: bash envtool.sh install dev${NC}"
         exit 1
     fi
-
     echo -e "${GREEN}🚀 Installing Python environment with $PYTHON_BINARY...${NC}"
     find . -name '__pycache__' -exec rm -rf {} +
-
     PY_VERSION=$($PYTHON_BINARY -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
     PY_MAJOR=$(echo "$PY_VERSION" | cut -d. -f1)
     PY_MINOR=$(echo "$PY_VERSION" | cut -d. -f2)
-
     if [ "$PY_MAJOR" -lt "$REQUIRED_MAJOR" ] || { [ "$PY_MAJOR" -eq "$REQUIRED_MAJOR" ] && [ "$PY_MINOR" -lt "$REQUIRED_MINOR" ]; }; then
         echo -e "${RED}❌ Python >= $REQUIRED_MAJOR.$REQUIRED_MINOR required. Found: $PY_VERSION${NC}"
         exit 1
     fi
-
     if [ ! -d ".venv" ]; then
         echo -e "${GREEN}📦 Creating virtual environment (.venv) using $PYTHON_BINARY...${NC}"
         $PYTHON_BINARY -m venv .venv
     else
         echo -e "${GREEN}📁 Virtual environment already exists. Skipping creation.${NC}"
     fi
-
     echo -e "${GREEN}💡 Activating virtual environment...${NC}"
     source .venv/bin/activate
-
     echo -e "${GREEN}⬆️  Upgrading pip...${NC}"
     pip install --upgrade pip
-
     if [ -f "requirements.txt" ]; then
         echo -e "${GREEN}📄 Installing dependencies from requirements.txt...${NC}"
         pip install -r requirements.txt
@@ -161,15 +300,12 @@ function install() {
         echo -e "${RED}❌ requirements.txt not found. Please add one.${NC}"
         exit 1
     fi
-
     if [ "$mode" = "dev" ] && [ -f "requirements-dev.txt" ]; then
         echo -e "${GREEN}📄 Installing dev dependencies from requirements-dev.txt...${NC}"
         pip install -r requirements-dev.txt
     fi
-
     echo -e "${GREEN}✅ Environment ready. Activate with: source .venv/bin/activate${NC}"
 }
-
 
 function execute_logic() {
     if [ ! -d ".venv" ]; then
@@ -178,16 +314,18 @@ function execute_logic() {
     fi
     echo -e "${GREEN}🔄 Executing endpoint logic...${NC}"
     source .venv/bin/activate
-    
     # Load variables from .env if it exists
     if [ -f .env ]; then
         set -a
         source .env
         set +a
     fi
-    
     # Execute the logic using Python directly
     python << 'PYTHON_SCRIPT'
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 from config import load_endpoints_from_env
 from datetime import datetime
 import requests
@@ -198,28 +336,23 @@ def execute_request(endpoint_config, default_payload=None):
     # Support simple URL string or full configuration
     if isinstance(endpoint_config, str):
         endpoint_config = {"url": endpoint_config, "method": "POST"}
-
     endpoint_url = endpoint_config.get("url")
     http_method = endpoint_config.get("method", "POST").upper()
     headers = endpoint_config.get("headers", {})
     body = endpoint_config.get("body") or endpoint_config.get("json")
     params = endpoint_config.get("params", {})
     timeout = endpoint_config.get("timeout", 30)
-
     # If no body is defined, use the default payload
     if body is None and default_payload:
         body = default_payload
-
     # Prepare kwargs for requests
     request_kwargs = {"timeout": timeout, "headers": headers, "params": params}
-
     # Add body according to its type
     if body is not None:
         if isinstance(body, dict):
             request_kwargs["json"] = body
         else:
             request_kwargs["data"] = body
-
     # Execute the request
     response = requests.request(http_method, endpoint_url, **request_kwargs)
     return response
@@ -227,7 +360,6 @@ def execute_request(endpoint_config, default_payload=None):
 def main():
     results = []
     errors = []
-
     try:
         endpoints = load_endpoints_from_env()
     except ValueError as e:
@@ -242,9 +374,7 @@ def main():
             "errors": [{"error": str(e), "timestamp": datetime.now().isoformat()}]
         }, indent=2))
         return
-
     print(f"\n🎯 Found {len(endpoints)} endpoint(s) to execute\n")
-
     for endpoint_idx, endpoint_config in enumerate(endpoints):
         endpoint_name = None
         try:
@@ -252,16 +382,13 @@ def main():
                 endpoint_name = endpoint_config
             else:
                 endpoint_name = endpoint_config.get("url", f"endpoint_{endpoint_idx}")
-
             print(f"⏳ Executing: {endpoint_name}")
             response = execute_request(endpoint_config, None)
-
             # Try to parse the response
             try:
                 response_data = response.json()
             except (ValueError, requests.exceptions.JSONDecodeError):
                 response_data = response.text
-
             results.append({
                 "endpoint": endpoint_name,
                 "method": (
@@ -273,9 +400,7 @@ def main():
                 "response": response_data,
                 "timestamp": datetime.now().isoformat(),
             })
-
             print(f"✅ Completed: {endpoint_name} - Status: {response.status_code}")
-
         except (requests.exceptions.RequestException, ValueError) as exc:
             error_msg = f"❌ Error on {endpoint_name or f'endpoint_{endpoint_idx}'}: {str(exc)}"
             print(error_msg)
@@ -284,7 +409,6 @@ def main():
                 "error": str(exc),
                 "timestamp": datetime.now().isoformat(),
             })
-
     print("\n" + "="*60)
     print("📊 Execution Results:")
     print("="*60)
@@ -300,7 +424,6 @@ def main():
 if __name__ == "__main__":
     main()
 PYTHON_SCRIPT
-    
     deactivate
     echo -e "${GREEN}✅ Execution completed.${NC}"
 }
@@ -357,8 +480,28 @@ case "${1:-}" in
         unset_proxies
         execute_logic
         ;;
+    mutation-check)
+        unset_proxies
+        mutation_check
+        ;;
+    quality-gate)
+        unset_proxies
+        quality_gate "$@"
+        ;;
     *)
-        echo -e "${RED}Unsupported command. Use: install [dev|prod], reinstall [dev|prod], uninstall, clean-env, clean-cache, code-check, status, test, start, execute${NC}"
+        echo -e "${RED}Unsupported command. Use:${NC}"
+        echo -e "${GREEN}  install [dev|prod]       ${NC}- Install dependencies"
+        echo -e "${GREEN}  reinstall [dev|prod]     ${NC}- Clean and reinstall"
+        echo -e "${GREEN}  uninstall                ${NC}- Remove virtual environment"
+        echo -e "${GREEN}  clean-env                ${NC}- Remove .venv only"
+        echo -e "${GREEN}  clean-cache              ${NC}- Clean Python cache files"
+        echo -e "${GREEN}  code-check [--ci]        ${NC}- Run code quality checks (use --ci for check-only mode)"
+        echo -e "${GREEN}  mutation-check           ${NC}- Run mutation testing with mutmut"
+        echo -e "${GREEN}  quality-gate [args]      ${NC}- Run quality gate"
+        echo -e "${GREEN}  status                   ${NC}- Check environment status"
+        echo -e "${GREEN}  test                     ${NC}- Run test suite"
+        echo -e "${GREEN}  start                    ${NC}- Start Flask server"
+        echo -e "${GREEN}  execute                  ${NC}- Execute configured endpoints"
         exit 1
         ;;
 esac

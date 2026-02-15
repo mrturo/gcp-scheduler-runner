@@ -1,0 +1,4 @@
+# Example CODEOWNERS file
+/src/ @mrturo
+/test/ @mrturo
+/integration/ @mrturo

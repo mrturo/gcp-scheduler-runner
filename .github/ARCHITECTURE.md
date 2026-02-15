@@ -3,60 +3,60 @@
 ## System Flow
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         GITHUB ACTIONS (CI/CD)                          │
-│                                                                         │
-│  1. Push to main branch triggers workflow                              │
+┌───────────────────────────────────────────────────────────────────────┐
+│                         GITHUB ACTIONS (CI/CD)                        │
+│                                                                       │
+│  1. Push to main branch triggers workflow                             │
 │  2. Load secrets: GCP_SA_KEY, GCP_PROJECT_ID, PORT, ENDPOINTS         │
-│  3. Run tests & quality checks                                         │
-│  4. Build Docker image (Alpine Linux + Flask)                          │
-│  5. Security scan with Trivy                                           │
-│  6. Push to Artifact Registry                                          │
-│  7. Deploy to Cloud Run with env vars from secrets                     │
-│                                                                         │
-│     Secrets → Environment Variables → Cloud Run Service                │
+│  3. Run tests & quality checks                                        │
+│  4. Build Docker image (Alpine Linux + Flask)                         │
+│  5. Security scan with Trivy                                          │
+│  6. Push to Artifact Registry                                         │
+│  7. Deploy to Cloud Run with env vars from secrets                    │
+│                                                                       │
+│     Secrets → Environment Variables → Cloud Run Service               │
 │     (GitHub)  (Injected at deploy)    (Runtime config)                │
-└─────────────────────────────────────────────────────────────────────────┘
+└───────────────────────────────────────────────────────────────────────┘
                                     ↓
                         Deployment completes
                                     ↓
-┌─────────────────────────────────────────────────────────────────────────┐
-│                    GOOGLE CLOUD RUN (Deployed Service)                  │
-│                                                                         │
+┌───────────────────────────────────────────────────────────────────────┐
+│                    GOOGLE CLOUD RUN (Deployed Service)                │
+│                                                                       │
 │   Service URL: https://gcp-scheduler-runner-xxx-uc.a.run.app          │
-│                                                                         │
-│   Environment Variables (from GitHub Secrets):                         │
-│   • PORT=5000                                                          │
+│                                                                       │
+│   Environment Variables (from GitHub Secrets):                        │
+│   • PORT=3000                                                         │
 │   • ENDPOINTS=["https://api.example.com/task1", ...]                  │
-│                                                                         │
-│   Available Endpoints:                                                 │
-│   • GET  /              → API documentation                            │
-│   • GET  /health        → Health check                                 │
+│                                                                       │
+│   Available Endpoints:                                                │
+│   • GET  /              → API documentation                           │
+│   • GET  /health        → Health check                                │
 │   • POST /execute       → 🎯 Execute all configured endpoints         │
-│   • GET  /task1         → Example task 1                               │
-│   • GET  /task2         → Example task 2                               │
-│   • GET  /task3         → Example task 3                               │
-└─────────────────────────────────────────────────────────────────────────┘
+│   • GET  /task1         → Example task 1                              │
+│   • GET  /task2         → Example task 2                              │
+│   • GET  /task3         → Example task 3                              │
+└───────────────────────────────────────────────────────────────────────┘
                                     ↑
                     Invokes /execute endpoint
                                     │
-┌─────────────────────────────────────────────────────────────────────────┐
-│                   GOOGLE CLOUD SCHEDULER (Trigger)                      │
-│                                                                         │
-│   Job Name: gcp-scheduler-runner-job                                   │
+┌───────────────────────────────────────────────────────────────────────┐
+│                   GOOGLE CLOUD SCHEDULER (Trigger)                    │
+│                                                                       │
+│   Job Name: gcp-scheduler-runner-job                                  │
 │   Schedule: 0 */6 * * * (Every 6 hours)                               │
-│   Timezone: UTC (⚠️ NOT local time)                                    │
-│                                                                         │
+│   Timezone: UTC (⚠️ NOT local time)                                   │
+│                                                                       │
 │   Target URL: https://gcp-scheduler-runner-xxx-uc.a.run.app/execute   │
-│   Method: POST                                                         │
-│   Authentication: OIDC (Service Account)                               │
-│                                                                         │
-│   Execution Times (UTC):                                               │
+│   Method: POST                                                        │
+│   Authentication: OIDC (Service Account)                              │
+│                                                                       │
+│   Execution Times (UTC):                                              │
 │   • 00:00 UTC (12:00 AM)                                              │
 │   • 06:00 UTC ( 6:00 AM)                                              │
 │   • 12:00 UTC (12:00 PM)                                              │
 │   • 18:00 UTC ( 6:00 PM)                                              │
-└─────────────────────────────────────────────────────────────────────────┘
+└───────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Data Flow: Execute Endpoint
@@ -64,37 +64,37 @@
 ```
 Cloud Scheduler sends POST to /execute
             ↓
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         /execute Handler                                │
-│                                                                         │
-│  1. Load ENDPOINTS from environment variable                           │
+┌───────────────────────────────────────────────────────────────────────┐
+│                         /execute Handler                              │
+│                                                                       │
+│  1. Load ENDPOINTS from environment variable                          │
 │     (Configured via GitHub Secret → Cloud Run env var)                │
-│                                                                         │
-│  2. Parse endpoint configurations:                                     │
+│                                                                       │
+│  2. Parse endpoint configurations:                                    │
 │     • Simple URLs: "https://api.example.com/task1"                    │
 │     • Full config: {"url": "...", "method": "POST", ...}              │
-│                                                                         │
-│  3. Execute endpoints (parallel or sequential):                        │
-│     ┌──────────────┐  ┌──────────────┐  ┌──────────────┐            │
-│     │  Endpoint 1  │  │  Endpoint 2  │  │  Endpoint 3  │            │
-│     │  HTTP POST   │  │  HTTP GET    │  │  HTTP PUT    │            │
-│     └──────────────┘  └──────────────┘  └──────────────┘            │
-│            ↓                  ↓                  ↓                      │
+│                                                                       │
+│  3. Execute endpoints (parallel or sequential):                       │
+│     ┌──────────────┐  ┌──────────────┐  ┌──────────────┐              │
+│     │  Endpoint 1  │  │  Endpoint 2  │  │  Endpoint 3  │              │
+│     │  HTTP POST   │  │  HTTP GET    │  │  HTTP PUT    │              │
+│     └──────────────┘  └──────────────┘  └──────────────┘              │
+│            ↓                  ↓                  ↓                    │
 │     ┌──────────────────────────────────────────────────┐              │
 │     │      Collect Results (success/failure)           │              │
 │     └──────────────────────────────────────────────────┘              │
-│                            ↓                                           │
+│                            ↓                                          │
 │  4. Return aggregated JSON response:                                  │
-│     {                                                                  │
-│       "success": true,                                                 │
-│       "total_endpoints": 3,                                            │
-│       "successful": 3,                                                 │
-│       "failed": 0,                                                     │
-│       "execution_mode": "parallel",                                    │
-│       "results": [...],                                                │
-│       "errors": []                                                     │
-│     }                                                                  │
-└─────────────────────────────────────────────────────────────────────────┘
+│     {                                                                 │
+│       "success": true,                                                │
+│       "total_endpoints": 3,                                           │
+│       "successful": 3,                                                │
+│       "failed": 0,                                                    │
+│       "execution_mode": "parallel",                                   │
+│       "results": [...],                                               │
+│       "errors": []                                                    │
+│     }                                                                 │
+└───────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Configuration Flow
@@ -105,7 +105,6 @@ Developer → GitHub Repository → GitHub Actions → GCP Artifact Registry →
     │              │                  │                     │                │
  Commits        Secrets           Workflow             Docker            Service
   code          stored            runs CI/CD            image             running
-                                                                          
                                                                     Uses ENDPOINTS
                                                                     from env vars
 ```
@@ -155,45 +154,45 @@ Executes:    Monday-Friday at 9:00 AM EST
 ## Security Flow
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                    Security Measures                             │
-├──────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  GitHub Actions:                                                 │
-│  ✓ Secrets stored encrypted                                     │
-│  ✓ Trivy vulnerability scanning                                 │
-│  ✓ Code quality checks (pylint 10/10)                           │
-│  ✓ 100% test coverage requirement                               │
-│                                                                  │
-│  Docker Image:                                                   │
-│  ✓ Alpine Linux (minimal CVEs)                                  │
-│  ✓ Non-root user (appuser:1000)                                 │
-│  ✓ Multi-stage build (production only deps)                     │
-│  ✓ No pip/setuptools in final image                             │
-│                                                                  │
-│  Cloud Run:                                                      │
-│  ✓ Managed platform (auto-patched)                              │
-│  ✓ HTTPS only                                                    │
-│  ✓ Option for OIDC authentication                               │
-│  ✓ IAM role-based access control                                │
-│                                                                  │
-│  Cloud Scheduler:                                                │
-│  ✓ Service account authentication                                │
-│  ✓ OIDC token for secure invocation                             │
-│  ✓ Audit logs enabled                                            │
-└──────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│                    Security Measures                       │
+├────────────────────────────────────────────────────────────┤
+│                                                            │
+│  GitHub Actions:                                           │
+│  ✓ Secrets stored encrypted                                │
+│  ✓ Trivy vulnerability scanning                            │
+│  ✓ Code quality checks (pylint 10/10)                      │
+│  ✓ 100% test coverage requirement                          │
+│                                                            │
+│  Docker Image:                                             │
+│  ✓ Alpine Linux (minimal CVEs)                             │
+│  ✓ Non-root user (appuser:1000)                            │
+│  ✓ Multi-stage build (production only deps)                │
+│  ✓ No pip/setuptools in final image                        │
+│                                                            │
+│  Cloud Run:                                                │
+│  ✓ Managed platform (auto-patched)                         |
+│  ✓ HTTPS only                                              │
+│  ✓ Option for OIDC authentication                          │
+│  ✓ IAM role-based access control                           │
+│                                                            │
+│  Cloud Scheduler:                                          │
+│  ✓ Service account authentication                          │
+│  ✓ OIDC token for secure invocation                        │
+│  ✓ Audit logs enabled                                      │
+└────────────────────────────────────────────────────────────┘
 ```
 
 ## Cost Structure
 
 ```
 Component             Pricing Model          Estimated Cost
-─────────────────────────────────────────────────────────────────
+───────────────────────────────────────────────────────────────
 GitHub Actions        Free (2000 min/month)  $0
 Artifact Registry     Storage + Egress       ~$1-2/month
 Cloud Run            Request + Compute       $0 (free tier)
 Cloud Scheduler      First 3 jobs free       $0
-                     
+
 Total Monthly Cost:                          ~$1-2/month
 ```
 
@@ -208,21 +207,21 @@ Total Monthly Cost:                          ~$1-2/month
 PARALLEL MODE (Default):
 ┌──────────────────────────────────────────────────┐
 │ Request: POST /execute                           │
-│ {"parallel": true, "max_workers": 5}            │
+│ {"parallel": true, "max_workers": 5}             │
 └──────────────────────────────────────────────────┘
                     ↓
-        ┌─────────────────────┐
-        │  ThreadPoolExecutor  │
-        └─────────────────────┘
-         ↓         ↓         ↓
+         ┌─────────────────────┐
+         │  ThreadPoolExecutor │
+         └─────────────────────┘
+          ↓         ↓         ↓
     Endpoint1  Endpoint2  Endpoint3
     (parallel execution)
-         ↓         ↓         ↓
-        └─────────┬─────────┘
-                  ↓
-           Collect results
-                  ↓
-           Return response
+          ↓         ↓         ↓
+          └─────────┬─────────┘
+                    ↓
+             Collect results
+                    ↓
+             Return response
 
 Advantages:
 • Faster total execution time
@@ -232,7 +231,7 @@ Advantages:
 SEQUENTIAL MODE:
 ┌──────────────────────────────────────────────────┐
 │ Request: POST /execute                           │
-│ {"parallel": false}                             │
+│ {"parallel": false}                              │
 └──────────────────────────────────────────────────┘
                     ↓
               Endpoint 1
@@ -257,20 +256,20 @@ Advantages:
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  Cloud Console:                                             │
-│  • Cloud Run logs: Real-time execution logs                │
-│  • Cloud Scheduler logs: Job invocation history            │
-│  • Cloud Trace: Request latency analysis                   │
-│  • Cloud Monitoring: Custom metrics & alerts               │
+│  • Cloud Run logs: Real-time execution logs                 │
+│  • Cloud Scheduler logs: Job invocation history             │
+│  • Cloud Trace: Request latency analysis                    │
+│  • Cloud Monitoring: Custom metrics & alerts                │
 │                                                             │
 │  GitHub:                                                    │
-│  • Actions logs: Build & deployment history                │
-│  • Security tab: Trivy vulnerability reports               │
-│  • Artifacts: Trivy reports (JSON, SARIF, Table)           │
+│  • Actions logs: Build & deployment history                 │
+│  • Security tab: Trivy vulnerability reports                │
+│  • Artifacts: Trivy reports (JSON, SARIF, Table)            │
 │                                                             │
 │  Application:                                               │
-│  • /health endpoint: Service health check                  │
-│  • Response JSON: Execution results & errors               │
-│  • Timestamps: ISO format for all executions               │
+│  • /health endpoint: Service health check                   │
+│  • Response JSON: Execution results & errors                │
+│  • Timestamps: ISO format for all executions                │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -279,4 +278,4 @@ Advantages:
 - [GitHub Actions Workflow](.github/workflows/deploy.yml)
 - [Cloud Scheduler Setup](.github/CLOUD_SCHEDULER.md)
 - [Secrets Configuration](.github/secrets.example)
-- [Deployment Guide](.github/README.md)
+- [Deployment Guide](.github/DEPLOYMENT.md)
