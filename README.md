@@ -153,4 +153,4 @@ See `.github/DEPLOYMENT.md`, `.github/ARCHITECTURE.md`, `.github/CLOUD_SCHEDULER
 
 ## License
 
-See [LICENSE](LICENSE) file for details..
+See [LICENSE](LICENSE) file for details.

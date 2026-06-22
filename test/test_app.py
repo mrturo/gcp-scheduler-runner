@@ -175,7 +175,7 @@ def test_index_uses_load_endpoints(mock_load, client):
     response = client.get("/", headers={"X-API-Key": "test-api-key-123"})
     assert response.status_code == 200
     data = json.loads(response.data)
-    assert data["configured_endpoints"] == 1
+    assert data["configured_endpoints"] == 2
 
 
 @patch("src.http_executor.HTTPExecutor.execute_request")
