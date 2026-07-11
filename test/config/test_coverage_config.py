@@ -6,6 +6,7 @@ import os
 import sys
 from src.config import (
     AppConfig,
+    RetryConfig,
     ServerConfig,
     EmailConfig,
     EndpointsLoader,
@@ -113,3 +114,25 @@ def test_resolve_template_vars_legacy_wrapper():
     """
     result = resolve_template_vars("No templates here")
     assert result == "No templates here"
+
+
+def test_retry_config_is_retry_enabled(monkeypatch):
+    """Test RetryConfig.is_retry_enabled returns True when max_attempts > 1."""
+    monkeypatch.setenv("RETRY_MAX_ATTEMPTS", "3")
+    config = RetryConfig()
+    assert config.is_retry_enabled() is True
+
+
+def test_retry_config_is_retry_disabled(monkeypatch):
+    """Test RetryConfig.is_retry_enabled returns False when max_attempts == 1."""
+    monkeypatch.setenv("RETRY_MAX_ATTEMPTS", "1")
+    config = RetryConfig()
+    assert config.is_retry_enabled() is False
+
+
+def test_retry_config_get_backoff_range(monkeypatch):
+    """Test RetryConfig.get_backoff_range returns correct (base, max) tuple."""
+    monkeypatch.setenv("RETRY_BACKOFF_BASE_SECONDS", "5")
+    monkeypatch.setenv("RETRY_BACKOFF_MAX_SECONDS", "60")
+    config = RetryConfig()
+    assert config.get_backoff_range() == (5.0, 60.0)

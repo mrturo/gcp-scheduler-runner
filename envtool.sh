@@ -36,7 +36,7 @@ function run_tests() {
     fi
     echo -e "${GREEN}🧪 Running tests...${NC}"
     source .venv/bin/activate
-    pytest test/ -v --cov=src --cov-report=term-missing
+    pytest test/ -v --cov=src --cov-report=term-missing --cov-fail-under=100
     local status=$?
     deactivate
     if [ $status -eq 0 ]; then
