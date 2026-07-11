@@ -68,6 +68,23 @@ class EmailConfig:
         }
 
 
+class RetryConfig:
+    """Retry configuration for internal per-endpoint retry logic."""
+
+    def __init__(self):
+        self.max_attempts = int(os.getenv("RETRY_MAX_ATTEMPTS", "3"))
+        self.backoff_base_seconds = float(os.getenv("RETRY_BACKOFF_BASE_SECONDS", "2"))
+        self.backoff_max_seconds = float(os.getenv("RETRY_BACKOFF_MAX_SECONDS", "30"))
+
+    def is_retry_enabled(self) -> bool:
+        """Return True if retry is enabled (max_attempts > 1)."""
+        return self.max_attempts > 1
+
+    def get_backoff_range(self) -> tuple:
+        """Return (base_seconds, max_seconds) backoff range tuple."""
+        return (self.backoff_base_seconds, self.backoff_max_seconds)
+
+
 class AppConfig:
     """Application configuration singleton.
     Centralizes all application configuration in one place.
@@ -87,6 +104,7 @@ class AppConfig:
             return
         self.server = ServerConfig()
         self.email = EmailConfig()
+        self.retry = RetryConfig()
         self._initialized = True
 
     @property
@@ -139,6 +157,21 @@ class AppConfig:
         """Check if email configuration is complete."""
         return self.email.is_configured()
 
+    @property
+    def retry_max_attempts(self) -> int:
+        """Get maximum retry attempts for internal endpoint retry."""
+        return self.retry.max_attempts
+
+    @property
+    def retry_backoff_base_seconds(self) -> float:
+        """Get base backoff seconds for exponential backoff between retries."""
+        return self.retry.backoff_base_seconds
+
+    @property
+    def retry_backoff_max_seconds(self) -> float:
+        """Get maximum backoff cap seconds between retries."""
+        return self.retry.backoff_max_seconds
+
 
 # Global configuration instance
 config = AppConfig()
@@ -153,6 +186,9 @@ SMTP_USER = config.smtp_user
 SMTP_PASSWORD = config.smtp_password
 EMAIL_FROM = config.email_from
 EMAIL_TO = config.email_to
+RETRY_MAX_ATTEMPTS = config.retry_max_attempts
+RETRY_BACKOFF_BASE_SECONDS = config.retry_backoff_base_seconds
+RETRY_BACKOFF_MAX_SECONDS = config.retry_backoff_max_seconds
 
 
 class TemplateResolver:

@@ -221,10 +221,15 @@ def execute_endpoints():
     parallel = data.get("parallel", True)
     max_workers = data.get("max_workers", min(10, len(endpoints) or 1))
     send_email = data.get("send_email", False)
-    # Create HTTP executor and execute endpoints
+    # Create HTTP executor and execute endpoints with internal per-endpoint retry
     executor = HTTPExecutor(max_workers=max_workers)
-    results, warnings, errors = executor.execute(
-        endpoints, parallel=parallel, default_payload=default_payload
+    results, warnings, errors = executor.execute_with_retry(
+        endpoints,
+        parallel=parallel,
+        default_payload=default_payload,
+        max_attempts=config.retry_max_attempts,
+        backoff_base_seconds=config.retry_backoff_base_seconds,
+        backoff_max_seconds=config.retry_backoff_max_seconds,
     )
     # Build execution summary
     execution_mode = "parallel" if parallel and len(endpoints) > 1 else "sequential"

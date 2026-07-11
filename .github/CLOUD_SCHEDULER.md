@@ -259,19 +259,42 @@ gcloud run services logs read gcp-scheduler-runner \
 
 ## Error Handling and Retries
 
-Cloud Scheduler automatically retries failed jobs with exponential backoff:
+### Internal retry (primary mechanism)
+
+The service now retries **only the endpoints that failed**, not the full list. This prevents
+Cloud Scheduler from re-executing endpoints that already succeeded on a previous invocation.
+
+Configure via environment variables (see `.env.example`):
+
+| Variable | Default | Description |
+|---|---|---|
+| `RETRY_MAX_ATTEMPTS` | `3` | Maximum total attempts per endpoint (1 = no retry) |
+| `RETRY_BACKOFF_BASE_SECONDS` | `2` | Base seconds for exponential backoff |
+| `RETRY_BACKOFF_MAX_SECONDS` | `30` | Maximum backoff cap in seconds |
+
+Backoff formula: `min(base × 2^(attempt−1), max)` — so with defaults: 2 s, 4 s, then done.
+
+### External Cloud Scheduler retry (safety net only)
+
+Because internal retry handles transient failures per-endpoint, Cloud Scheduler retry is now
+only a last-resort safety net for full-service unavailability (e.g., Cloud Run cold-start
+timeout, network partition). Set it conservatively:
 
 ```bash
-# Configure retry settings
+# Recommended: 1 external retry only (safety net for total service failure)
 gcloud scheduler jobs update http gcp-scheduler-runner-job \
   --location=us-central1 \
-  --max-retry-attempts=3 \
-  --max-retry-duration=600s \
-  --min=5s \
-  --max=60s \
-  --max-doublings=3 \
+  --max-retry-attempts=1 \
+  --max-retry-duration=300s \
+  --min=30s \
+  --max=300s \
   --project=YOUR_PROJECT_ID
 ```
+
+> **Why reduce external retries?** If Cloud Scheduler retries the full `/execute` request,
+> it re-runs *all* endpoints — including those that already succeeded — causing duplicate
+> side effects on non-idempotent endpoints. The internal retry now handles partial failures
+> correctly, so external retries should only fire on complete service outages.
 
 ## Cost Estimation
 

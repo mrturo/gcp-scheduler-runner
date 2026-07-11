@@ -280,14 +280,26 @@ def test_execute_endpoints_sequential_mode(mock_execute, client):
     assert data["execution_mode"] == "sequential"
 
 
+@patch("src.http_executor.time.sleep")
 @patch("src.http_executor.HTTPExecutor.execute_request")
-def test_execute_endpoints_parallel_with_errors(mock_execute, client):
-    """Test parallel execution with mixed success and failure."""
-    call_count = [0]
+def test_execute_endpoints_parallel_with_errors(mock_execute, _mock_sleep, client):
+    """Test parallel execution where two endpoints always fail across all retry attempts."""
+    always_fail_urls = {
+        "http://localhost:3000/task2",
+        "http://localhost:3000/task4",
+    }
 
     def side_effect_function(*args, **kwargs):
-        call_count[0] += 1
-        if call_count[0] % 2 == 0:
+        # Locate EndpointConfig by checking for a str .url attribute (self has none)
+        endpoint_url = next(
+            (
+                getattr(arg, "url", None)
+                for arg in args
+                if isinstance(getattr(arg, "url", None), str)
+            ),
+            None,
+        )
+        if endpoint_url in always_fail_urls:
             raise requests.exceptions.RequestException("Connection error")
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -310,7 +322,7 @@ def test_execute_endpoints_parallel_with_errors(mock_execute, client):
         content_type="application/json",
         headers={"X-API-Key": "test-api-key-123"},
     )
-    assert response.status_code == 500  # Expect 500 when some endpoints fail
+    assert response.status_code == 500  # 2 endpoints fail across all retry attempts
     data = json.loads(response.data)
     assert data["success"] is False
     assert data["total_endpoints"] == 4

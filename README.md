@@ -84,6 +84,22 @@ Sensitive credentials are referenced in endpoint configuration using `${VAR_NAME
 
 Endpoints are configured in `.env` as a JSON array. Supports template variables, simple URLs, and mixed formats. See `.env.example` for real examples.
 
+### Internal Retry Configuration
+
+The service retries **only the endpoints that failed**, not the entire list. This prevents
+Cloud Scheduler from duplicating side effects on endpoints that already succeeded.
+
+| Variable | Default | Description |
+|---|---|---|
+| `RETRY_MAX_ATTEMPTS` | `3` | Maximum total attempts per endpoint (set to `1` to disable retry) |
+| `RETRY_BACKOFF_BASE_SECONDS` | `2` | Base seconds for exponential backoff between retries |
+| `RETRY_BACKOFF_MAX_SECONDS` | `30` | Maximum backoff cap in seconds |
+
+Backoff formula: `min(base × 2^(attempt−1), max)`. With defaults: 2 s → 4 s → done.
+
+See `.github/CLOUD_SCHEDULER.md` for guidance on aligning `--max-retry-attempts` in Cloud
+Scheduler with these internal retry settings.
+
 ### Email Notifications Setup (Optional)
 
 Configure Gmail SMTP for email notifications. See `.env.example` for required variables and setup instructions.

@@ -67,7 +67,7 @@ class EndpointConfig:
 
 
 @dataclass
-class ExecutionResult:
+class ExecutionResult:  # pylint: disable=too-many-instance-attributes
     """Result of a single endpoint execution."""
 
     endpoint: str
@@ -77,6 +77,7 @@ class ExecutionResult:
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     error: Optional[str] = None
     status: ExecutionStatus = ExecutionStatus.SUCCESS
+    attempts: int = field(default=1)
 
     def to_dict(self) -> Dict:
         """Convert to dictionary representation."""
@@ -86,6 +87,7 @@ class ExecutionResult:
             "status_code": self.status_code,
             "response": self.response,
             "timestamp": self.timestamp,
+            "attempts": self.attempts,
         }
         if self.error:
             result["error"] = self.error

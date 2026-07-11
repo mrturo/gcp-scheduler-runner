@@ -4,12 +4,16 @@ This module handles HTTP request execution with support for parallel and sequent
 Follows Single Responsibility Principle (SRP) - handles only HTTP execution logic.
 """
 
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed  # pylint: disable=E0611
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 import requests
 
 from src.models import EndpointConfig, ExecutionResult, ExecutionStatus
+
+# Maximum seconds to spend on retry cycles, matching Cloud Scheduler's max attempt-deadline.
+_RETRY_ATTEMPT_DEADLINE_SECONDS = 1800.0
 
 
 class HTTPExecutor:
@@ -167,3 +171,130 @@ class HTTPExecutor:
         if not parallel or len(endpoints) <= 1:
             return self.execute_sequential(endpoints, default_payload)
         return self.execute_parallel(endpoints, default_payload)
+
+    def _partition_errors_for_retry(
+        self,
+        errors: List[ExecutionResult],
+        pending_configs: List,
+    ) -> Tuple[List, List[ExecutionResult], List[ExecutionResult]]:
+        """
+        Partition failed results into retriable configs and permanent errors.
+
+        Builds a URL → raw-config map from pending_configs so each failed
+        ExecutionResult can be correlated back to its original configuration.
+        Endpoints whose raw config is not a str/dict (raises ValueError in
+        from_config) are silently skipped — they produce "endpoint_N" results
+        that won't match any URL key and will become permanent errors.
+
+        Args:
+            errors: ERROR results from the latest execute() call
+            pending_configs: Raw configs that were attempted in that call
+        Returns:
+            Tuple of (retriable_raw_configs, retriable_errors, permanent_errors)
+        """
+        retry_url_map: Dict[str, List] = {}
+        for cfg in pending_configs:
+            try:
+                endpoint_config = EndpointConfig.from_config(cfg)
+                retry_url_map.setdefault(endpoint_config.url, []).append(cfg)
+            except ValueError:
+                pass  # non-str/dict configs cannot be retried
+
+        retriable_configs: List = []
+        retriable_errors: List[ExecutionResult] = []
+        permanent_errors: List[ExecutionResult] = []
+
+        for error in errors:
+            configs_for_url = retry_url_map.get(error.endpoint)
+            if configs_for_url:
+                retriable_configs.append(configs_for_url.pop(0))
+                retriable_errors.append(error)
+            else:
+                permanent_errors.append(error)
+
+        return retriable_configs, retriable_errors, permanent_errors
+
+    def execute_with_retry(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+        self,
+        endpoints: List,
+        parallel: bool = True,
+        default_payload=None,
+        max_attempts: int = 3,
+        backoff_base_seconds: float = 2.0,
+        backoff_max_seconds: float = 30.0,
+    ) -> Tuple[List[ExecutionResult], List[ExecutionResult], List[ExecutionResult]]:
+        """
+        Execute endpoints with internal retry, limited only to endpoints that failed.
+
+        Successful and warning endpoints are never re-executed. Only ERROR endpoints
+        are retried up to max_attempts times total with exponential backoff between
+        attempts. Retries stop early if the elapsed time would exceed the Cloud
+        Scheduler attempt-deadline budget (_RETRY_ATTEMPT_DEADLINE_SECONDS).
+
+        Args:
+            endpoints: List of endpoint configurations (strings or dicts)
+            parallel: If True, execute in parallel; otherwise sequential
+            default_payload: Default payload for endpoints without body
+            max_attempts: Maximum total attempts per endpoint (1 = no retry)
+            backoff_base_seconds: Base for exponential backoff in seconds
+            backoff_max_seconds: Maximum backoff cap in seconds
+        Returns:
+            Tuple of (successes, warnings, errors) as lists of ExecutionResult
+        """
+        start_time = time.monotonic()
+        all_results: List[ExecutionResult] = []
+        all_warnings: List[ExecutionResult] = []
+        final_errors: List[ExecutionResult] = []
+        pending_configs = list(endpoints)
+
+        for attempt_num in range(1, max_attempts + 1):
+            results, warnings, errors = self.execute(pending_configs, parallel, default_payload)
+
+            # Stamp the attempt number on every result from this pass
+            for result in results:
+                result.attempts = attempt_num
+            for warning in warnings:
+                warning.attempts = attempt_num
+
+            all_results.extend(results)
+            all_warnings.extend(warnings)
+
+            if not errors:
+                break  # all endpoints succeeded or warned — nothing to retry
+
+            retriable_configs, retriable_errors, permanent_errors = (
+                self._partition_errors_for_retry(errors, pending_configs)
+            )
+            for error in permanent_errors:
+                error.attempts = attempt_num
+            final_errors.extend(permanent_errors)
+
+            if not retriable_configs or attempt_num == max_attempts:
+                for error in retriable_errors:
+                    error.attempts = attempt_num
+                final_errors.extend(retriable_errors)
+                break
+
+            # Exponential backoff: base * 2^(attempt-1), capped at max
+            backoff = min(backoff_base_seconds * (2 ** (attempt_num - 1)), backoff_max_seconds)
+
+            # Respect the Cloud Scheduler attempt-deadline budget
+            elapsed = time.monotonic() - start_time
+            if elapsed + backoff >= _RETRY_ATTEMPT_DEADLINE_SECONDS:
+                print(
+                    f"⏱ Retry budget exhausted after {elapsed:.1f}s — "
+                    f"stopping with {len(retriable_errors)} unresolved error(s)"
+                )
+                for error in retriable_errors:
+                    error.attempts = attempt_num
+                final_errors.extend(retriable_errors)
+                break
+
+            print(
+                f"🔁 Retrying {len(retriable_configs)} failed endpoint(s) "
+                f"(attempt {attempt_num + 1}/{max_attempts}, backoff={backoff:.1f}s)"
+            )
+            time.sleep(backoff)
+            pending_configs = retriable_configs
+
+        return all_results, all_warnings, final_errors
