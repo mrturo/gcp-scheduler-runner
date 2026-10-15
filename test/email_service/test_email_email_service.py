@@ -14,26 +14,34 @@ from src.email_service import (
     ExecutionSummary,
 )
 
+
 class DummySMTP:
     """
     Dummy SMTP class for mocking email sending in tests.
     """
+
     def __init__(self, *_, sent_messages=None, **__):
         """Initialize DummySMTP with optional sent_messages list."""
         self.sent_messages = sent_messages if sent_messages is not None else []
+
     def __enter__(self):
         """Enter context manager."""
         return self
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Exit context manager."""
         return False
+
     def starttls(self):
         """Mock starttls method."""
+
     def login(self, user, pwd):
         """Mock login method."""
+
     def send_message(self, msg):
         """Mock send_message method."""
         self.sent_messages.append(msg)
+
 
 @pytest.mark.parametrize(
     "query_string,body_value",
@@ -43,35 +51,41 @@ class DummySMTP:
         ("", True),
     ],
 )
-def test_execute_endpoints_email_subject_variants(
-    client, monkeypatch, query_string, body_value
-):
+def test_execute_endpoints_email_subject_variants(client, monkeypatch, query_string, body_value):
     """
     Test email subject variants for /execute endpoint with different test_mode values.
     """
     sent_messages = []
+
     class DummySMTPLocal(DummySMTP):
         """Dummy SMTP subclass for local test usage."""
+
         def __init__(self, *_, **__):
             """Initialize DummySMTPLocal with sent_messages."""
             super().__init__(sent_messages=sent_messages)
+
         def dummy_method(self):
             """Dummy public method to satisfy pylint R0903."""
             return None
+
         def another_dummy_method(self):
             """Another dummy public method to satisfy pylint R0903."""
             return None
+
     monkeypatch.setattr("smtplib.SMTP", DummySMTPLocal)
     monkeypatch.setenv("EMAIL_ADDRESS", "test@example.com")
     monkeypatch.setenv("SMTP_PASSWORD", "password123")
+
     class DummyResult:
         """Dummy result object for endpoint execution."""
+
         def __init__(self):
             """Initialize DummyResult with default values."""
             self.endpoint = "https://api.example.com/test"
             self.method = "GET"
             self.status_code = 200
             self.timestamp = datetime.now().isoformat()
+
         def to_dict(self):
             """Return result as dict."""
             return {
@@ -80,9 +94,11 @@ def test_execute_endpoints_email_subject_variants(
                 "status_code": self.status_code,
                 "timestamp": self.timestamp,
             }
+
         def another_dummy_method(self):
             """Another dummy public method to satisfy pylint R0903."""
             return None
+
     monkeypatch.setattr(
         "src.http_executor.HTTPExecutor.execute",
         lambda self, endpoints, parallel=True, default_payload=None: ([DummyResult()], [], []),
@@ -92,7 +108,6 @@ def test_execute_endpoints_email_subject_variants(
             f"/execute{query_string}",
             data=json.dumps({"endpoints": ["https://api.example.com/test"], "send_email": True}),
             content_type="application/json",
-            headers={"X-API-Key": "test-api-key-123"},
         )
     else:
         body = {"endpoints": ["https://api.example.com/test"], "send_email": True}
@@ -102,12 +117,12 @@ def test_execute_endpoints_email_subject_variants(
             "/execute",
             data=json.dumps(body),
             content_type="application/json",
-            headers={"X-API-Key": "test-api-key-123"},
         )
     assert response.status_code == 200
     assert sent_messages, "No email message was sent"
     subject = sent_messages[0]["Subject"]
     assert "Test Execution Report" in subject, f"Incorrect subject: {subject}"
+
 
 def test_send_email_notification_missing_smtp_user():
     """
@@ -134,6 +149,7 @@ def test_send_email_notification_missing_smtp_user():
     assert result["email_sent"] is False
     assert "Email configuration incomplete" in result["error"]
 
+
 def test_send_email_notification_missing_smtp_password():
     """
     Test send_notification returns error if smtp_password is missing.
@@ -151,6 +167,7 @@ def test_send_email_notification_missing_smtp_password():
     result = service.send_notification(summary, execution_context="test")
     assert result["email_sent"] is False
     assert "Email configuration incomplete" in result["error"]
+
 
 def test_send_email_notification_missing_email_to():
     """Test error if email_to is missing."""
@@ -175,6 +192,7 @@ def test_send_email_notification_missing_email_to():
     assert result["email_sent"] is False
     assert "Email configuration incomplete" in result["error"]
 
+
 def test_send_email_notification_uses_smtp_user_as_from():
     """Test smtp_user is used as from address if email_from is missing."""
     with patch("smtplib.SMTP") as mock_smtp:
@@ -195,6 +213,7 @@ def test_send_email_notification_uses_smtp_user_as_from():
         assert result["from"] == "test@gmail.com"
         sent_message = mock_server.send_message.call_args[0][0]
         assert "Test Execution Report" in sent_message["Subject"]
+
 
 def test_send_email_notification_with_errors():
     """Test email notification with errors in summary."""
@@ -244,6 +263,7 @@ def test_send_email_notification_with_errors():
         assert sent_message.is_multipart()
         parts = list(sent_message.walk())
         assert len(parts) >= 4
+
 
 def test_send_email_notification_smtp_exception():
     """Test SMTP exception handling in email notification."""

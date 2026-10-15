@@ -33,7 +33,6 @@ def test_execute_endpoints_post_with_json(mock_execute, client):
         "/execute",
         data=json.dumps(payload),
         content_type="application/json",
-        headers={"X-API-Key": "test-api-key-123"},
     )
     assert response.status_code == 200
     data = json.loads(response.data)
@@ -59,7 +58,7 @@ def test_execute_endpoints_with_error(mock_execute, client, monkeypatch):
         )
 
     client.get = lambda *args, **kwargs: DummyResponse()
-    response = client.get("/execute", headers={"X-API-Key": "test-api-key-123"})
+    response = client.get("/execute")
     assert response.status_code == 500  # Expect 500 when all endpoints fail
     data = json.loads(response.data)
     assert data["success"] is False
@@ -68,14 +67,15 @@ def test_execute_endpoints_with_error(mock_execute, client, monkeypatch):
 
 
 @patch("src.http_executor.HTTPExecutor.execute_request")
-def test_execute_endpoints_with_non_json_response(mock_execute, client):
+def test_execute_endpoints_with_non_json_response(mock_execute, client, monkeypatch):
     """Test execute endpoint when response is not JSON."""
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.side_effect = ValueError("Not JSON")
     mock_response.text = "Plain text response"
     mock_execute.return_value = mock_response
-    response = client.get("/execute", headers={"X-API-Key": "test-api-key-123"})
+    monkeypatch.setenv("ENDPOINTS", '["https://api.example.com/task1"]')
+    response = client.get("/execute")
     assert response.status_code == 200
     data = json.loads(response.data)
     assert "results" in data
@@ -101,7 +101,6 @@ def test_execute_endpoints_with_dict_endpoint_config(mock_execute, client):
         "/execute",
         data=json.dumps(payload),
         content_type="application/json",
-        headers={"X-API-Key": "test-api-key-123"},
     )
     assert response.status_code == 200
     data = json.loads(response.data)
@@ -165,7 +164,7 @@ def test_load_endpoints_from_env_empty_list(mock_getenv):
         load_endpoints_from_env()
 
 
-@patch("app.load_endpoints_from_env")
+@patch("src.app.load_endpoints_from_env")
 def test_index_uses_load_endpoints(mock_load, client):
     """Index should call load_endpoints_from_env when no endpoints are set."""
     mock_load.return_value = ["http://example.com"]
@@ -175,11 +174,11 @@ def test_index_uses_load_endpoints(mock_load, client):
     response = client.get("/", headers={"X-API-Key": "test-api-key-123"})
     assert response.status_code == 200
     data = json.loads(response.data)
-    assert data["configured_endpoints"] == 2
+    assert data["configured_endpoints"] == 1
 
 
 @patch("src.http_executor.HTTPExecutor.execute_request")
-@patch("app.load_endpoints_from_env")
+@patch("src.app.load_endpoints_from_env")
 def test_execute_uses_load_endpoints(mock_load, mock_execute, client):
     """Execute endpoint should call load_endpoints_from_env when no endpoints provided."""
     mock_load.return_value = ["http://localhost:3000/task1"]
@@ -191,14 +190,14 @@ def test_execute_uses_load_endpoints(mock_load, mock_execute, client):
     import src.app as app_module
 
     app_module.ENDPOINTS_TO_EXECUTE = None
-    response = client.get("/execute", headers={"X-API-Key": "test-api-key-123"})
+    response = client.get("/execute")
     # The mock returns a valid endpoint, so status will be 200
     assert response.status_code == 200
     data = json.loads(response.data)
     assert "results" in data
 
 
-@patch("app.load_endpoints_from_env")
+@patch("src.app.load_endpoints_from_env")
 def test_index_handles_missing_endpoints(mock_load, client):
     """Index should handle missing ENDPOINTS by returning 0 configured endpoints."""
     mock_load.side_effect = ValueError("no endpoints")
@@ -211,14 +210,14 @@ def test_index_handles_missing_endpoints(mock_load, client):
     assert data["configured_endpoints"] == 0
 
 
-@patch("app.load_endpoints_from_env")
+@patch("src.app.load_endpoints_from_env")
 def test_execute_handles_missing_endpoints(mock_load, client):
     """Execute should handle missing ENDPOINTS by returning zero total_endpoints."""
     mock_load.side_effect = ValueError("no endpoints")
     import src.app as app_module
 
     app_module.ENDPOINTS_TO_EXECUTE = []
-    response = client.get("/execute", headers={"X-API-Key": "test-api-key-123"})
+    response = client.get("/execute")
     assert response.status_code == 200
     data = json.loads(response.data)
     assert data["total_endpoints"] == 0
@@ -243,7 +242,6 @@ def test_execute_endpoints_parallel_mode(mock_execute, client):
         "/execute",
         data=json.dumps(payload),
         content_type="application/json",
-        headers={"X-API-Key": "test-api-key-123"},
     )
     assert response.status_code == 200
     data = json.loads(response.data)
@@ -271,7 +269,6 @@ def test_execute_endpoints_sequential_mode(mock_execute, client):
         "/execute",
         data=json.dumps(payload),
         content_type="application/json",
-        headers={"X-API-Key": "test-api-key-123"},
     )
     assert response.status_code == 200
     data = json.loads(response.data)
@@ -320,7 +317,6 @@ def test_execute_endpoints_parallel_with_errors(mock_execute, _mock_sleep, clien
         "/execute",
         data=json.dumps(payload),
         content_type="application/json",
-        headers={"X-API-Key": "test-api-key-123"},
     )
     assert response.status_code == 500  # 2 endpoints fail across all retry attempts
     data = json.loads(response.data)
@@ -347,7 +343,6 @@ def test_execute_endpoints_parallel_with_max_workers(mock_execute, client):
         "/execute",
         data=json.dumps(payload),
         content_type="application/json",
-        headers={"X-API-Key": "test-api-key-123"},
     )
     assert response.status_code == 200
     data = json.loads(response.data)
@@ -371,7 +366,6 @@ def test_execute_endpoints_single_endpoint_sequential(mock_execute, client):
         "/execute",
         data=json.dumps(payload),
         content_type="application/json",
-        headers={"X-API-Key": "test-api-key-123"},
     )
     assert response.status_code == 200
     data = json.loads(response.data)
@@ -396,7 +390,6 @@ def test_execute_endpoints_parallel_default_behavior(mock_execute, client):
         "/execute",
         data=json.dumps(payload),
         content_type="application/json",
-        headers={"X-API-Key": "test-api-key-123"},
     )
     assert response.status_code == 200
     data = json.loads(response.data)
@@ -442,7 +435,6 @@ def test_execute_endpoint_handles_load_endpoints_exception(monkeypatch, client):
         "/execute",
         data=json.dumps(payload),
         content_type="application/json",
-        headers={"X-API-Key": "test-api-key-123"},
     )
     assert response.status_code == 200
     data = json.loads(response.data)

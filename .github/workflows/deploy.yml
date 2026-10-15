@@ -38,8 +38,7 @@ env:
   SERVICE: gcp-scheduler-runner
   # App config - ENDPOINTS structure is public (secrets use ${VAR_NAME} template variables)
   ENDPOINTS: '[ { "url": "https://gcp-todoist-runner-646185261155.us-central1.run.app", "method": "GET", "headers": { "X-API-Key": "${ENDPOINT_API_KEY_1}" }, "timeout": 60 }, { "url": "https://pf-rates-646185261155.us-central1.run.app/sync", "method": "POST", "headers": { "X-API-Key": "${ENDPOINT_API_KEY_2}" }, "timeout": 60 } ]'
-  # Secrets for authentication and template variables
-  API_KEY: ${{ secrets.API_KEY }}
+  # Secrets for outbound endpoint template variables
   ENDPOINT_API_KEY_1: ${{ secrets.ENDPOINT_API_KEY_1 }}
   ENDPOINT_API_KEY_2: ${{ secrets.ENDPOINT_API_KEY_2 }}
   # Email configuration
@@ -57,7 +56,6 @@ jobs:
       contents: read
       security-events: write
     env:
-      API_KEY: "test-api-key-123"
       ENDPOINT_API_KEY_1: "dummy-key-123"
       EMAIL_ADDRESS: "test@example.com"
       SMTP_PASSWORD: "password123"
@@ -252,7 +250,6 @@ jobs:
           # YAML requires JSON to be quoted as a string
           cat > env-vars.yaml <<'EOF'
           ENDPOINTS: '${{ env.ENDPOINTS }}'
-          API_KEY: '${{ env.API_KEY }}'
           ENDPOINT_API_KEY_1: '${{ env.ENDPOINT_API_KEY_1 }}'
           ENDPOINT_API_KEY_2: '${{ env.ENDPOINT_API_KEY_2 }}'
           EMAIL_ADDRESS: '${{ env.EMAIL_ADDRESS }}'
@@ -262,7 +259,7 @@ jobs:
             --image="${IMAGE_URI}" \
             --region="${{ env.REGION }}" \
             --platform=managed \
-            --allow-unauthenticated \
+            --no-allow-unauthenticated \
             --memory=512Mi \
             --cpu=1 \
             --min-instances=0 \
@@ -302,6 +299,38 @@ jobs:
           echo "🕐 Setting up Cloud Scheduler job: $JOB_NAME"
           echo "📍 Target URL: ${SERVICE_URL}/execute"
           echo "⏰ Schedule: Daily at 4:30 AM UTC (1:30 AM / 12:30 AM Chile)"
+          OIDC_SERVICE_ACCOUNT="gcp-scheduler-oidc@${{ env.PROJECT_ID }}.iam.gserviceaccount.com"
+          echo " Validating Scheduler OIDC service account: $OIDC_SERVICE_ACCOUNT"
+          if ! gcloud iam service-accounts describe "$OIDC_SERVICE_ACCOUNT" \
+            --project="${{ env.PROJECT_ID }}" \
+            --quiet >/dev/null; then
+            echo " OIDC service account does not exist or is not visible to the deployer"
+            exit 1
+          fi
+          echo " Granting Cloud Run invoker access to the Scheduler OIDC account"
+          gcloud run services add-iam-policy-binding "${{ env.SERVICE }}" \
+            --region="${{ env.REGION }}" \
+            --project="${{ env.PROJECT_ID }}" \
+            --member="serviceAccount:${OIDC_SERVICE_ACCOUNT}" \
+            --role="roles/run.invoker" \
+            --quiet >/dev/null
+          if ! gcloud run services get-iam-policy "${{ env.SERVICE }}" \
+            --region="${{ env.REGION }}" \
+            --project="${{ env.PROJECT_ID }}" \
+            --flatten="bindings[].members" \
+            --filter="bindings.role=roles/run.invoker AND bindings.members=serviceAccount:${OIDC_SERVICE_ACCOUNT}" \
+            --format="value(bindings.members)" | grep -Fxq "serviceAccount:${OIDC_SERVICE_ACCOUNT}"; then
+            echo " Cloud Run invoker binding was not applied"
+            exit 1
+          fi
+          if ! gcloud iam service-accounts test-iam-permissions "$OIDC_SERVICE_ACCOUNT" \
+            --permissions=iam.serviceAccounts.actAs \
+            --project="${{ env.PROJECT_ID }}" \
+            --format="value(permissions)" | grep -qx "iam.serviceAccounts.actAs"; then
+            echo " Deployer lacks iam.serviceAccounts.actAs for the Scheduler OIDC account"
+            exit 1
+          fi
+          echo " Scheduler OIDC identity and actAs permission validated"
           # Check if job already exists with improved verification
           echo "🔍 Checking if Cloud Scheduler job exists..."
           if gcloud scheduler jobs describe "$JOB_NAME" \
@@ -321,7 +350,9 @@ jobs:
               --schedule="30 4 * * *" \
               --uri="${SERVICE_URL}/execute" \
               --http-method=POST \
-              --update-headers="Content-Type=application/json,X-API-Key=${{ secrets.API_KEY }},X-Scheduler-Trigger=true" \
+              --clear-headers \
+              --oidc-service-account-email="${OIDC_SERVICE_ACCOUNT}" \
+              --oidc-token-audience="${SERVICE_URL}" \
               --message-body='{
                 "parallel": true,
                 "max_workers": 10,
@@ -330,7 +361,10 @@ jobs:
               --attempt-deadline=300s \
               --max-retry-attempts=3 \
               --description="Executes configured endpoints daily at 4:30 AM UTC with parallel execution and email notifications"
-            echo "✅ Cloud Scheduler job updated successfully"
+            gcloud scheduler jobs update http "$JOB_NAME" \
+              --location="${{ env.REGION }}" \
+              --update-headers="Content-Type=application/json,X-Scheduler-Trigger=true"
+            echo " Cloud Scheduler job updated successfully"
           else
             echo "➕ Creating new Cloud Scheduler job..."
             gcloud scheduler jobs create http "$JOB_NAME" \
@@ -339,7 +373,9 @@ jobs:
               --time-zone="UTC" \
               --uri="${SERVICE_URL}/execute" \
               --http-method=POST \
-              --headers="Content-Type=application/json,X-API-Key=${{ secrets.API_KEY }},X-Scheduler-Trigger=true" \
+              --headers="Content-Type=application/json,X-Scheduler-Trigger=true" \
+              --oidc-service-account-email="${OIDC_SERVICE_ACCOUNT}" \
+              --oidc-token-audience="${SERVICE_URL}" \
               --message-body='{
                 "parallel": true,
                 "max_workers": 10,

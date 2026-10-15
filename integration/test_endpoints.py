@@ -2,7 +2,10 @@
 
 import json
 
+import pytest
 import requests
+
+pytestmark = pytest.mark.integration
 
 # Base URL for the API
 BASE_URL = "http://localhost:3000"

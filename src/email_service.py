@@ -42,13 +42,15 @@ class EmailTemplateBuilder:
             return self
         self.html_parts.append("<h3 style='color: #28a745;'>✅ Successful Executions</h3><ul>")
         for result in results:
-            self.html_parts.append(f"""
+            self.html_parts.append(
+                f"""
                 <li>
                     <strong>{result['endpoint']}</strong> [{result['method']}]
                     - Status: {result['status_code']}
                     <br><small>Timestamp: {result['timestamp']}</small>
                 </li>
-                """)
+                """
+            )
         self.html_parts.append("</ul>")
         return self
 
@@ -70,14 +72,16 @@ class EmailTemplateBuilder:
         for warning in warnings:
             response_text = str(warning.get("response", "N/A"))
             response_preview = response_text[:200] if len(response_text) > 200 else response_text
-            self.html_parts.append(f"""
+            self.html_parts.append(
+                f"""
                 <li style="color: #856404;">
                     <strong>{warning['endpoint']}</strong> [{warning['method']}]
                     - Status: {warning['status_code']}
                     <br><small>Timestamp: {warning['timestamp']}</small>
                     <br><small>Response preview: {response_preview}...</small>
                 </li>
-                """)
+                """
+            )
         self.html_parts.append("</ul></div>")
         return self
 
@@ -88,13 +92,15 @@ class EmailTemplateBuilder:
         self.html_parts.append("<h3 style='color: #dc3545;'>❌ Errors</h3><ul>")
         for error in errors:
             error_msg = error.get("error", "Unknown error")
-            self.html_parts.append(f"""
+            self.html_parts.append(
+                f"""
                 <li style="color: #dc3545;">
                     <strong>{error['endpoint']}</strong>
                     <br>Error: {error_msg}
                     <br><small>Timestamp: {error['timestamp']}</small>
                 </li>
-                """)
+                """
+            )
         self.html_parts.append("</ul>")
         return self
 

@@ -40,14 +40,12 @@ def post_execute(client, endpoints, status_code=200, parallel=True, requests_moc
                 "/execute",
                 data=json.dumps(payload),
                 content_type="application/json",
-                headers={"X-API-Key": "test-api-key-123"},
             )
     else:
         response = client.post(
             "/execute",
             data=json.dumps(payload),
             content_type="application/json",
-            headers={"X-API-Key": "test-api-key-123"},
         )
     assert response.status_code == status_code
     return json.loads(response.data)
@@ -59,7 +57,6 @@ def post_execute_custom_payload(client, payload, status_code=200):
         "/execute",
         data=json.dumps(payload),
         content_type="application/json",
-        headers={"X-API-Key": "test-api-key-123"},
     )
     assert response.status_code == status_code
     return json.loads(response.data)

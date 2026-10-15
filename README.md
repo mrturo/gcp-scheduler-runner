@@ -10,7 +10,7 @@ Python Flask service that orchestrates multiple HTTP endpoint executions via the
 - **Email notifications** with Gmail SMTP and JSON attachments (optional)
 - **cURL-like configurations**: HTTP methods, headers, body, query params, timeouts
 - **Template variable substitution**: Separate secrets from configuration using `${VAR_NAME}`
-- **API key authentication** for protected endpoints
+- **Cloud Run IAM authentication** for the private `/execute` endpoint
 - Mix simple URLs and complex configurations
 - Error handling with detailed reporting
 - Health check endpoint for monitoring
@@ -56,25 +56,16 @@ Create a `.env` file from `.env.example`:
 cp .env.example .env
 ```
 
-echo "API_KEY=your_generated_key_here" >> .env
+### Authentication
 
-### API Key Authentication (Optional)
+In production, Cloud Run IAM protects the private `/execute` endpoint. Cloud
+Scheduler invokes it with OIDC; the application does not require or accept a
+static API key for this route. Cloud Run rejects unauthenticated or unauthorized
+callers before the request reaches Flask.
 
-Generate and configure an API key to protect endpoints:
-
-```bash
-python3 -c "import secrets; print(secrets.token_urlsafe(32))"
-# Add to .env
-echo "API_KEY=your_generated_key_here" >> .env
-```
-
-**Protected endpoints** (require `X-API-Key` header when API_KEY is set):
-- `/` - Index page
-- `/execute` - Main orchestrator endpoint
-- `/task1`, `/task2`, `/task3` - Example task endpoints
-
-**Unprotected endpoint**:
-- `/health` - Health check
+`/health` remains unauthenticated for platform health checks. The example task
+routes retain their legacy optional application authentication for local use;
+they are not the Scheduler entrypoint.
 
 ### Template Variable Substitution
 
@@ -123,12 +114,9 @@ curl http://localhost:3000/health
 ### Execute Configured Endpoints
 
 ```bash
-# Without authentication (if API_KEY not set)
-curl -X POST http://localhost:3000/execute
-
-# With authentication (if API_KEY is set)
+# Local execution (Cloud Run supplies IAM authentication in production)
 curl -X POST http://localhost:3000/execute \
-  -H "X-API-Key: your_api_key_here"
+  -H "Content-Type: application/json"
 ```
 
 ### Execute with Custom Endpoints

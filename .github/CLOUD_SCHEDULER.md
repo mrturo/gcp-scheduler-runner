@@ -25,7 +25,7 @@ Once the service is deployed to Cloud Run via GitHub Actions, you can set up Clo
 - Service successfully deployed to Cloud Run
 - Cloud Scheduler API enabled in your GCP project
 - `gcloud` CLI configured with your project
-- `API_KEY` configured as GitHub Secret and deployed to Cloud Run
+- Cloud Run IAM configured with only the dedicated Scheduler OIDC service account as invoker
 
 ## Enable Cloud Scheduler API
 
@@ -35,9 +35,10 @@ gcloud services enable cloudscheduler.googleapis.com --project=YOUR_PROJECT_ID
 
 ## Create a Scheduler Job
 
-**⚠️ Important**: All requests must include the `X-API-Key` header with your configured API key.
+Cloud Run IAM authenticates Scheduler requests before they reach Flask. Do not
+configure a static API key or use `X-Scheduler-Trigger` as authentication.
 
-### Basic Configuration (POST Request with Authentication)
+### Basic Configuration (POST Request with OIDC Authentication)
 
 ```bash
 gcloud scheduler jobs create http gcp-scheduler-runner-job \
@@ -45,7 +46,7 @@ gcloud scheduler jobs create http gcp-scheduler-runner-job \
   --schedule="0 */6 * * *" \
   --uri="https://gcp-scheduler-runner-xxx-uc.a.run.app/execute" \
   --http-method=POST \
-  --headers="Content-Type=application/json,X-API-Key=YOUR_API_KEY_HERE,X-Scheduler-Trigger=true" \
+  --headers="Content-Type=application/json,X-Scheduler-Trigger=true" \
   --attempt-deadline=300s \
   --description="Execute configured endpoints every 6 hours" \
   --project=YOUR_PROJECT_ID
@@ -60,15 +61,15 @@ gcloud scheduler jobs create http gcp-scheduler-runner-job \
   --uri="https://gcp-scheduler-runner-xxx-uc.a.run.app/execute" \
   --http-method=POST \
   --message-body='{"endpoints": ["http://example.com/api1", "http://example.com/api2"], "parallel": true, "max_workers": 5}' \
-  --headers="Content-Type=application/json,X-API-Key=YOUR_API_KEY_HERE,X-Scheduler-Trigger=true" \
+  --headers="Content-Type=application/json,X-Scheduler-Trigger=true" \
   --attempt-deadline=300s \
   --description="Execute custom endpoints weekdays at 9 AM" \
   --project=YOUR_PROJECT_ID
 ```
 
-### With OIDC Authentication (Recommended for Production)
+### OIDC Configuration
 
-For services that require authentication:
+For the private production service, configure the dedicated Scheduler identity:
 
 ```bash
 # Create service account for Cloud Scheduler

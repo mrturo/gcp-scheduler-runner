@@ -41,7 +41,6 @@ def test_post_execute_calls_execute_with_retry(mock_retry, client):
         "/execute",
         data=json.dumps({"endpoints": ["http://a.com"]}),
         content_type="application/json",
-        headers={"X-API-Key": "test-api-key-123"},
     )
 
     assert response.status_code == 200
@@ -81,7 +80,6 @@ def test_execute_summary_shape_unchanged(mock_retry, client):
         "/execute",
         data=json.dumps({"endpoints": ["http://a.com"]}),
         content_type="application/json",
-        headers={"X-API-Key": "test-api-key-123"},
     )
 
     data = json.loads(response.data)

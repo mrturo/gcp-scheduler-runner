@@ -128,10 +128,13 @@ def _handle_email_notification(send_email: bool, summary: ExecutionSummary):
 
 
 @app.route("/execute", methods=["POST", "GET"])
-@require_api_key()
 def execute_endpoints():
     """
     Main endpoint to execute configured HTTP endpoints (POST) or return summary (GET).
+
+    Authentication for this route is provided by the private Cloud Run IAM
+    boundary. Do not add an application-level API-key or custom-header check:
+    Cloud Scheduler's OIDC token is validated by Cloud Run before Flask runs.
     """
     if request.method == "GET":
         # For GET, mimic the POST response structure for test compatibility

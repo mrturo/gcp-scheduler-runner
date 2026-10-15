@@ -34,7 +34,6 @@ Configure these secrets in your GitHub repository settings (`Settings > Secrets 
 | Secret | Description | Example |
 |--------|-------------|---------|
 | `PORT` | Application port | `3000` |
-| `API_KEY` | API key for X-API-Key authentication | `sk_live_abc123...` (min 32 chars recommended) |
 | `ENDPOINTS` | JSON array of endpoints (supports ${VAR_NAME} templates) | See examples below |### Email Notifications (Optional)
 | Secret | Description | Example |
 |--------|-------------|---------||
@@ -184,20 +183,18 @@ docker build -t gcp-scheduler-runner:local .
 # Run container (without email)
 docker run -p 3000:3000 \
   -e ENDPOINTS='["http://example.com/api"]' \
-  -e API_KEY='your_api_key_here' \
   gcp-scheduler-runner:local
 
 # Run container (with email notifications)
 docker run -p 3000:3000 \
   -e ENDPOINTS='["http://example.com/api"]' \
-  -e API_KEY='your_api_key_here' \
   -e EMAIL_ADDRESS='your-email@gmail.com' \
   -e SMTP_PASSWORD='your_app_password' \
   gcp-scheduler-runner:local
 
 # Test endpoints
 curl http://localhost:3000/health
-curl -X POST http://localhost:3000/execute -H "X-API-Key: your_api_key_here"
+curl -X POST http://localhost:3000/execute -H "Content-Type: application/json"
 ```
 
 ## Deployment
@@ -235,10 +232,10 @@ The service can be invoked by Google Cloud Scheduler for automated periodic exec
 
 ### Scheduler-Specific Features
 
-**Detection Header**: Cloud Scheduler jobs should include `X-Scheduler-Trigger: true` header:
+**Detection Header**: Cloud Scheduler jobs may include `X-Scheduler-Trigger: true`:
 - Enables automatic execution context detection
 - Improves email notification formatting (shows "Scheduled Execution" context)
-- Distinguishes scheduled runs from manual API calls in logs
+- This header is a functional signal only, not authentication; headers can be spoofed by any caller that reaches the private service
 
 **Example Cloud Scheduler Job** (with email notifications):
 ```bash
@@ -247,7 +244,9 @@ gcloud scheduler jobs create http gcp-scheduler-runner-daily \
   --schedule="30 4 * * *" \
   --uri="https://YOUR-SERVICE-URL.run.app/execute" \
   --http-method=POST \
-  --headers="Content-Type=application/json,X-API-Key=YOUR_API_KEY,X-Scheduler-Trigger=true" \
+  --oidc-service-account-email="gcp-scheduler-oidc@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+  --oidc-token-audience="https://YOUR-SERVICE-URL.run.app" \
+  --headers="Content-Type=application/json,X-Scheduler-Trigger=true" \
   --message-body='{
     "parallel": true,
     "max_workers": 10,
