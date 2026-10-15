@@ -11,7 +11,7 @@ from flask.testing import FlaskClient
 os.environ.setdefault("PYTHON_DOTENV_DISABLED", "true")
 os.environ.setdefault("API_KEY", "test-api-key-123")
 
-import src.app as app_mod  # noqa: E402
+import src.app as app_mod  # pylint: disable=wrong-import-position
 
 
 # Fixture required by pytest-flask to provide the Flask app
@@ -23,18 +23,23 @@ def prevent_external_smtp(monkeypatch):
         """Minimal SMTP context manager for deterministic tests."""
 
         def __enter__(self):
+            """Return the fake SMTP connection."""
             return self
 
-        def __exit__(self, exc_type, exc_value, traceback):
+        def __exit__(self, *_args):
+            """Leave the fake SMTP context without suppressing errors."""
             return False
 
         def starttls(self):
+            """Pretend to start TLS."""
             return None
 
-        def login(self, username, password):
+        def login(self, *_args):
+            """Pretend to authenticate."""
             return None
 
-        def send_message(self, message):
+        def send_message(self, *_args):
+            """Pretend to send an email."""
             return None
 
     monkeypatch.setattr("smtplib.SMTP", DummySMTP)
