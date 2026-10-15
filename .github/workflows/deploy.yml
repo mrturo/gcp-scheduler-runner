@@ -317,6 +317,8 @@ jobs:
       - name: Setup Cloud Scheduler job for daily execution
         run: |
           set -euo pipefail
+          STEP="initialization"
+          trap 'status=$?; echo "::error title=Scheduler setup failure::step=${STEP}; exit_code=${status}"; exit "${status}"' ERR
           JOB_NAME="gcp-scheduler-runner-chile"
           SERVICE_URL="${{ needs.deploy.outputs.service_url }}"
           echo "🕐 Setting up Cloud Scheduler job: $JOB_NAME"
@@ -324,6 +326,7 @@ jobs:
           echo "⏰ Schedule: Daily at 4:30 AM UTC (1:30 AM / 12:30 AM Chile)"
           OIDC_SERVICE_ACCOUNT="gcp-scheduler-oidc@${{ env.PROJECT_ID }}.iam.gserviceaccount.com"
           echo " Validating Scheduler OIDC service account: $OIDC_SERVICE_ACCOUNT"
+          STEP="validate-oidc-service-account"
           if ! gcloud iam service-accounts describe "$OIDC_SERVICE_ACCOUNT" \
             --project="${{ env.PROJECT_ID }}" \
             --quiet >/dev/null; then
@@ -331,12 +334,14 @@ jobs:
             exit 1
           fi
           echo " Granting Cloud Run invoker access to the Scheduler OIDC account"
+          STEP="grant-cloud-run-invoker"
           gcloud run services add-iam-policy-binding "${{ env.SERVICE }}" \
             --region="${{ env.REGION }}" \
             --project="${{ env.PROJECT_ID }}" \
             --member="serviceAccount:${OIDC_SERVICE_ACCOUNT}" \
             --role="roles/run.invoker" \
             --quiet >/dev/null
+          STEP="verify-cloud-run-invoker"
           if ! gcloud run services get-iam-policy "${{ env.SERVICE }}" \
             --region="${{ env.REGION }}" \
             --project="${{ env.PROJECT_ID }}" \
@@ -347,6 +352,7 @@ jobs:
             exit 1
           fi
           DEPLOYER_MEMBER="serviceAccount:github-actions-deployer@${{ env.PROJECT_ID }}.iam.gserviceaccount.com"
+          STEP="verify-oidc-actas"
           if ! gcloud iam service-accounts get-iam-policy "$OIDC_SERVICE_ACCOUNT" \
             --project="${{ env.PROJECT_ID }}" \
             --flatten="bindings[].members" \
@@ -357,7 +363,8 @@ jobs:
           fi
           echo " Scheduler OIDC identity and actAs permission validated"
           # Check if job already exists with improved verification
-          echo "🔍 Checking if Cloud Scheduler job exists..."
+          echo " Checking if Cloud Scheduler job exists..."
+          STEP="inspect-scheduler-job"
           if gcloud scheduler jobs describe "$JOB_NAME" \
             --location="${{ env.REGION }}" \
             --project="${{ env.PROJECT_ID }}" \
@@ -370,7 +377,8 @@ jobs:
           fi
           # Execute appropriate command based on job existence
           if [ "$JOB_EXISTS" = true ]; then
-            echo "🔄 Updating existing Cloud Scheduler job..."
+            echo " Updating existing Cloud Scheduler job..."
+            STEP="update-scheduler-http-target"
             gcloud scheduler jobs update http "$JOB_NAME" \
               --location="${{ env.REGION }}" \
               --project="${{ env.PROJECT_ID }}" \
@@ -388,13 +396,15 @@ jobs:
               --attempt-deadline=300s \
               --max-retry-attempts=3 \
               --description="Executes configured endpoints daily at 4:30 AM UTC with parallel execution and email notifications"
+            STEP="update-scheduler-headers"
             gcloud scheduler jobs update http "$JOB_NAME" \
               --location="${{ env.REGION }}" \
               --project="${{ env.PROJECT_ID }}" \
               --update-headers="Content-Type=application/json,X-Scheduler-Trigger=true"
             echo " Cloud Scheduler job updated successfully"
           else
-            echo "➕ Creating new Cloud Scheduler job..."
+            echo " Creating new Cloud Scheduler job..."
+            STEP="create-scheduler-http-target"
             gcloud scheduler jobs create http "$JOB_NAME" \
               --location="${{ env.REGION }}" \
               --project="${{ env.PROJECT_ID }}" \
@@ -418,7 +428,8 @@ jobs:
             echo "✅ Cloud Scheduler job created successfully"
           fi
           echo ""
-          echo "📊 Job Details:"
+          echo " Job Details:"
+          STEP="verify-final-scheduler-job"
           gcloud scheduler jobs describe "$JOB_NAME" \
             --location="${{ env.REGION }}" \
             --project="${{ env.PROJECT_ID }}" \
