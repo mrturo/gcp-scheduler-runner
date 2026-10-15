@@ -180,6 +180,7 @@ jobs:
           echo "Effective Google project: ${EFFECTIVE_PROJECT}"
           echo "Configured project: ${{ env.PROJECT_ID }}"
           if [ "${EFFECTIVE_PROJECT}" != "${{ env.PROJECT_ID }}" ]; then
+            echo "::error title=GCP project mismatch::identity=${ACTIVE_ACCOUNT}; effective_project=${EFFECTIVE_PROJECT}; configured_project=${{ env.PROJECT_ID }}"
             echo "ERROR: Authenticated project does not match GCP_PROJECT_ID"
             exit 1
           fi
@@ -197,6 +198,8 @@ jobs:
             echo "  repository: ${{ env.REPO }}"
             echo "  location: ${{ env.REGION }}"
             echo ""
+            ERROR_SUMMARY=$(tr '\n' ' ' < "${ERROR_FILE}" | tr -s ' ')
+            echo "::error title=Artifact Registry access::identity=${ACTIVE_ACCOUNT}; project=${{ env.PROJECT_ID }}; repository=${{ env.REPO }}; error=${ERROR_SUMMARY}"
             echo "gcloud error:"
             cat "${ERROR_FILE}"
             rm -f "${ERROR_FILE}"
