@@ -174,10 +174,10 @@ jobs:
           set -euo pipefail
           echo "🔍 Checking Artifact Registry repository and vulnerability scanning status..."
           # Check if repository exists and get vulnerability scanning status
-          if ! FULL_OUTPUT=$(gcloud artifacts repositories describe "${{ env.REPO }}" \
+          if ! STATUS=$(gcloud artifacts repositories describe "${{ env.REPO }}" \
             --location="${{ env.REGION }}" \
             --project="${{ env.PROJECT_ID }}" \
-            --format="value(vulnerabilityScanningConfig.enablementConfig)" 2>&1); then
+            --format="value(vulnerabilityScanningConfig.enablementConfig)"); then
             echo "❌ ERROR: Cannot access Artifact Registry repository '${{ env.REPO }}'"
             echo ""
             echo "Repository may not exist. To create it, run in Cloud Shell:"
@@ -193,16 +193,13 @@ jobs:
             echo "    --location=${{ env.REGION }} \\"
             echo "    --disable-vulnerability-scanning"
             echo ""
-            echo "Error details:"
-            echo "$FULL_OUTPUT"
+            echo "The gcloud error output above contains the access failure details."
             exit 1
           fi
-          # Extract only ENABLED/DISABLED (last line if multiline output)
-          STATUS=$(echo "$FULL_OUTPUT" | grep -E '^(ENABLED|DISABLED)$' | tail -1)
+          STATUS=$(printf '%s' "$STATUS" | tr -d '\\r' | tail -n 1)
           if [ -z "$STATUS" ]; then
             echo "❌ ERROR: Cannot parse vulnerability scanning status"
-            echo "Raw output:"
-            echo "$FULL_OUTPUT"
+            echo "The repository returned no vulnerability scanning status."
             exit 1
           fi
           echo "📊 Current status: $STATUS"
