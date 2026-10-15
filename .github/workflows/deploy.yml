@@ -154,6 +154,7 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ env.PROJECT_ID }}
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
@@ -172,13 +173,33 @@ jobs:
       - name: Ensure Artifact Registry vulnerability scanning is disabled (cost control)
         run: |
           set -euo pipefail
-          echo "🔍 Checking Artifact Registry repository and vulnerability scanning status..."
-          # Check if repository exists and get vulnerability scanning status
+          echo "Checking Artifact Registry repository and vulnerability scanning status..."
+          ACTIVE_ACCOUNT=$(gcloud auth list --filter=status:ACTIVE --format='value(account)')
+          EFFECTIVE_PROJECT=$(gcloud config get-value project 2>/dev/null)
+          echo "Active Google identity: ${ACTIVE_ACCOUNT}"
+          echo "Effective Google project: ${EFFECTIVE_PROJECT}"
+          echo "Configured project: ${{ env.PROJECT_ID }}"
+          if [ "${EFFECTIVE_PROJECT}" != "${{ env.PROJECT_ID }}" ]; then
+            echo "ERROR: Authenticated project does not match GCP_PROJECT_ID"
+            exit 1
+          fi
+          # Capture stderr explicitly because GitHub may not expose the step log.
+          ERROR_FILE=$(mktemp)
           if ! STATUS=$(gcloud artifacts repositories describe "${{ env.REPO }}" \
             --location="${{ env.REGION }}" \
             --project="${{ env.PROJECT_ID }}" \
-            --format="value(vulnerabilityScanningConfig.enablementConfig)"); then
-            echo "❌ ERROR: Cannot access Artifact Registry repository '${{ env.REPO }}'"
+            --format="value(vulnerabilityScanningConfig.enablementConfig)" 2>"${ERROR_FILE}"); then
+            echo "ERROR: Cannot access Artifact Registry repository '${{ env.REPO }}'"
+            echo ""
+            echo "Authenticated identity and target:"
+            echo "  identity: ${ACTIVE_ACCOUNT}"
+            echo "  project: ${{ env.PROJECT_ID }}"
+            echo "  repository: ${{ env.REPO }}"
+            echo "  location: ${{ env.REGION }}"
+            echo ""
+            echo "gcloud error:"
+            cat "${ERROR_FILE}"
+            rm -f "${ERROR_FILE}"
             echo ""
             echo "Repository may not exist. To create it, run in Cloud Shell:"
             echo ""
@@ -193,9 +214,9 @@ jobs:
             echo "    --location=${{ env.REGION }} \\"
             echo "    --disable-vulnerability-scanning"
             echo ""
-            echo "The gcloud error output above contains the access failure details."
             exit 1
           fi
+          rm -f "${ERROR_FILE}"
           STATUS=$(printf '%s' "$STATUS" | tr -d '\\r' | tail -n 1)
           if [ -z "$STATUS" ]; then
             echo "❌ ERROR: Cannot parse vulnerability scanning status"
@@ -285,6 +306,7 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ env.PROJECT_ID }}
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
