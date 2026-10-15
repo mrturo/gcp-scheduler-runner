@@ -318,7 +318,7 @@ jobs:
         run: |
           set -euo pipefail
           STEP="initialization"
-          trap 'status=$?; echo "::error title=Scheduler setup failure::step=${STEP}; exit_code=${status}"; exit "${status}"' ERR
+          trap 'status=$?; if [ "${status}" -ne 0 ]; then echo "::error title=Scheduler setup failure::step=${STEP}; exit_code=${status}"; fi' EXIT
           JOB_NAME="gcp-scheduler-runner-chile"
           SERVICE_URL="${{ needs.deploy.outputs.service_url }}"
           echo "🕐 Setting up Cloud Scheduler job: $JOB_NAME"
