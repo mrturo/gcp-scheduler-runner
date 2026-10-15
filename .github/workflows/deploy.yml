@@ -176,6 +176,7 @@ jobs:
           # Check if repository exists and get vulnerability scanning status
           if ! FULL_OUTPUT=$(gcloud artifacts repositories describe "${{ env.REPO }}" \
             --location="${{ env.REGION }}" \
+            --project="${{ env.PROJECT_ID }}" \
             --format="value(vulnerabilityScanningConfig.enablementConfig)" 2>&1); then
             echo "❌ ERROR: Cannot access Artifact Registry repository '${{ env.REPO }}'"
             echo ""
@@ -335,6 +336,7 @@ jobs:
           echo "🔍 Checking if Cloud Scheduler job exists..."
           if gcloud scheduler jobs describe "$JOB_NAME" \
             --location="${{ env.REGION }}" \
+            --project="${{ env.PROJECT_ID }}" \
             --quiet >/dev/null 2>&1; then
             JOB_EXISTS=true
             echo "📋 Job already exists. Will update configuration..."
@@ -347,6 +349,7 @@ jobs:
             echo "🔄 Updating existing Cloud Scheduler job..."
             gcloud scheduler jobs update http "$JOB_NAME" \
               --location="${{ env.REGION }}" \
+              --project="${{ env.PROJECT_ID }}" \
               --schedule="30 4 * * *" \
               --uri="${SERVICE_URL}/execute" \
               --http-method=POST \
@@ -363,12 +366,14 @@ jobs:
               --description="Executes configured endpoints daily at 4:30 AM UTC with parallel execution and email notifications"
             gcloud scheduler jobs update http "$JOB_NAME" \
               --location="${{ env.REGION }}" \
+              --project="${{ env.PROJECT_ID }}" \
               --update-headers="Content-Type=application/json,X-Scheduler-Trigger=true"
             echo " Cloud Scheduler job updated successfully"
           else
             echo "➕ Creating new Cloud Scheduler job..."
             gcloud scheduler jobs create http "$JOB_NAME" \
               --location="${{ env.REGION }}" \
+              --project="${{ env.PROJECT_ID }}" \
               --schedule="30 4 * * *" \
               --time-zone="UTC" \
               --uri="${SERVICE_URL}/execute" \
@@ -392,4 +397,5 @@ jobs:
           echo "📊 Job Details:"
           gcloud scheduler jobs describe "$JOB_NAME" \
             --location="${{ env.REGION }}" \
+            --project="${{ env.PROJECT_ID }}" \
             --format="table(name,schedule,state,httpTarget.uri)"
