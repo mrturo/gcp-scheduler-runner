@@ -333,14 +333,25 @@ jobs:
             echo " OIDC service account does not exist or is not visible to the deployer"
             exit 1
           fi
-          echo " Granting Cloud Run invoker access to the Scheduler OIDC account"
-          STEP="grant-cloud-run-invoker"
-          gcloud run services add-iam-policy-binding "${{ env.SERVICE }}" \
+          echo " Ensuring Cloud Run invoker access for the Scheduler OIDC account"
+          STEP="check-cloud-run-invoker"
+          INVOKER_MEMBER="serviceAccount:${OIDC_SERVICE_ACCOUNT}"
+          if gcloud run services get-iam-policy "${{ env.SERVICE }}" \
             --region="${{ env.REGION }}" \
             --project="${{ env.PROJECT_ID }}" \
-            --member="serviceAccount:${OIDC_SERVICE_ACCOUNT}" \
-            --role="roles/run.invoker" \
-            --quiet >/dev/null
+            --flatten="bindings[].members" \
+            --filter="bindings.role=roles/run.invoker AND bindings.members=${INVOKER_MEMBER}" \
+            --format="value(bindings.members)" | grep -Fxq "$INVOKER_MEMBER"; then
+            echo " Cloud Run invoker binding already exists; no policy mutation required"
+          else
+            STEP="grant-cloud-run-invoker"
+            gcloud run services add-iam-policy-binding "${{ env.SERVICE }}" \
+              --region="${{ env.REGION }}" \
+              --project="${{ env.PROJECT_ID }}" \
+              --member="$INVOKER_MEMBER" \
+              --role="roles/run.invoker" \
+              --quiet >/dev/null
+          fi
           STEP="verify-cloud-run-invoker"
           if ! gcloud run services get-iam-policy "${{ env.SERVICE }}" \
             --region="${{ env.REGION }}" \
