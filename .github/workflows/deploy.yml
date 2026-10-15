@@ -346,11 +346,13 @@ jobs:
             echo " Cloud Run invoker binding was not applied"
             exit 1
           fi
-          if ! gcloud iam service-accounts test-iam-permissions "$OIDC_SERVICE_ACCOUNT" \
-            --permissions=iam.serviceAccounts.actAs \
+          DEPLOYER_MEMBER="serviceAccount:github-actions-deployer@${{ env.PROJECT_ID }}.iam.gserviceaccount.com"
+          if ! gcloud iam service-accounts get-iam-policy "$OIDC_SERVICE_ACCOUNT" \
             --project="${{ env.PROJECT_ID }}" \
-            --format="value(permissions)" | grep -qx "iam.serviceAccounts.actAs"; then
-            echo " Deployer lacks iam.serviceAccounts.actAs for the Scheduler OIDC account"
+            --flatten="bindings[].members" \
+            --filter="bindings.role=roles/iam.serviceAccountUser AND bindings.members=${DEPLOYER_MEMBER}" \
+            --format="value(bindings.members)" | grep -Fxq "$DEPLOYER_MEMBER"; then
+            echo " Deployer lacks roles/iam.serviceAccountUser for the Scheduler OIDC account"
             exit 1
           fi
           echo " Scheduler OIDC identity and actAs permission validated"
