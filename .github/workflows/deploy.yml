@@ -37,7 +37,7 @@ env:
   REPO: gcp-scheduler-runner
   SERVICE: gcp-scheduler-runner
   # App config - ENDPOINTS structure is public (secrets use ${VAR_NAME} template variables)
-  ENDPOINTS: '[ { "url": "https://gcp-todoist-runner-646185261155.us-central1.run.app", "method": "GET", "headers": { "X-API-Key": "${ENDPOINT_API_KEY_1}" }, "timeout": 60 }, { "url": "https://pf-rates-646185261155.us-central1.run.app/sync", "method": "POST", "headers": { "X-API-Key": "${ENDPOINT_API_KEY_2}" }, "timeout": 60 } ]'
+  ENDPOINTS: '[ { "url": "https://gcp-todoist-runner-646185261155.us-central1.run.app", "method": "GET", "headers": { "X-API-Key": "${ENDPOINT_API_KEY_1}" }, "timeout": 60 }, { "url": "https://pf-svc-reference-646185261155.us-central1.run.app/sync", "method": "POST", "headers": { "X-API-Key": "${ENDPOINT_API_KEY_2}" }, "timeout": 60 } ]'
   # Secrets for outbound endpoint template variables
   ENDPOINT_API_KEY_1: ${{ secrets.ENDPOINT_API_KEY_1 }}
   ENDPOINT_API_KEY_2: ${{ secrets.ENDPOINT_API_KEY_2 }}
